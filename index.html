@@ -284,6 +284,7 @@ const APPS = [
   { file: 'finance.html',     name: 'Finance',     tag: 'Net worth · subs · orders · wishlist', icon: '💰', wide: true },
   { file: 'gym.html',         name: 'Gym',         tag: 'Progressive overload coach',           icon: '🏋️', wide: true },
   { file: 'supplements.html', name: 'Supplements', tag: 'Your stack + smart recommendations',   icon: '💊' },
+  { file: 'stimulant.html',   name: 'Stimulants',  tag: 'Caffeine · peak & crash timing',        icon: '☕' },
   { file: 'whoop.html',       name: 'Fitness Band', tag: 'Whoop · Fitbit · Apple Watch sync',      icon: '🔋' },
   { file: 'water.html',       name: 'Water',       tag: 'Daily hydration target',                icon: '💧' },
   { file: 'creator.html',     name: 'Creator',     tag: 'Schedule · accounts · analytics',       icon: '🎬' },
@@ -456,6 +457,7 @@ function statFor(file){
     if (file === 'finance.html') { const s = lsGet('finance_standalone_v1'); if (s && Array.isArray(s.accounts) && s.accounts.length) { const nw = s.accounts.reduce((a,x)=>a+(Number(x.amountCHF)||0),0); return { value: 'CHF ' + fmtNum(nw), label: 'net worth' }; } }
     else if (file === 'supplements.html') { const s = lsGet('supplements_standalone_v1'); if (s && Array.isArray(s.items) && s.items.length) { const tk = (s.taken && s.taken[activeDateKey()]) || {}; const n = s.items.filter(i => tk[i.id]).length; return { value: n + '/' + s.items.length, label: 'taken today' }; } }
     else if (file === 'water.html') { const s = lsGet('water_standalone_v1'); if (s && s.logs) { const n = s.logs[localDateKey()] || 0; return { value: String(n), label: (n === 1 ? 'drink' : 'drinks') + ' today' }; } }
+    else if (file === 'stimulant.html') { const s = lsGet('stimulant_standalone_v1'); if (s && Array.isArray(s.logs)) { const k = localDateKey(); const mg = s.logs.filter(l => l && localDateKey(new Date(l.t)) === k).reduce((a,l)=>a+(Number(l.mg)||0),0); if (mg>0) return { value: mg + ' mg', label: 'caffeine today' }; } }
     else if (file === 'whoop.html') { if (health && health.recovery != null) return { value: Math.round(health.recovery) + '%', label: 'recovery' }; }
   } catch (e) {}
   return null;
@@ -464,6 +466,7 @@ const ART = {
   'finance.html':'linear-gradient(135deg,#7C3AED,#22D3EE)',
   'gym.html':'linear-gradient(135deg,#F472B6,#8B5CF6)',
   'supplements.html':'linear-gradient(135deg,#22D3EE,#7C3AED)',
+  'stimulant.html':'linear-gradient(135deg,#7C3AED,#F59E0B)',
   'whoop.html':'linear-gradient(135deg,#8B5CF6,#F472B6)',
   'water.html':'linear-gradient(135deg,#06B6D4,#3B82F6)',
   'creator.html':'linear-gradient(135deg,#FBBF24,#F472B6)',
