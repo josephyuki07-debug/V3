@@ -46,16 +46,31 @@ module.exports = async (req, res) => {
     let body = {};
     try { const raw = await readBody(req); body = raw ? JSON.parse(raw) : {}; } catch (e) { body = {}; }
     const g = (k) => (body[k] != null ? body[k] : q.get(k));
+    // Sleep: accept hours directly, OR a sleepStart/sleepEnd ISO pair (what the
+    // Apple "Sleep" Shortcut gives) and work out the hours + bed/wake times.
+    let sleepHours = num(g('sleepHours'));
+    let bedtime = g('bedtime') || null, wakeTime = g('wakeTime') || null;
+    const sStart = g('sleepStart'), sEnd = g('sleepEnd');
+    if (sStart && sEnd) {
+      const t1 = Date.parse(sStart), t2 = Date.parse(sEnd);
+      if (isFinite(t1) && isFinite(t2) && t2 > t1) {
+        if (sleepHours == null) sleepHours = Math.round(((t2 - t1) / 3600000) * 10) / 10;
+        const hm = (iso) => { const m = String(iso).match(/T(\d{2}):(\d{2})/); return m ? m[1] + ':' + m[2] : null; };
+        if (!bedtime) bedtime = hm(sStart);
+        if (!wakeTime) wakeTime = hm(sEnd);
+      }
+    }
+    const target = num(g('sleepTargetHours')) || 8;
     const data = {
       source: 'apple', connected: true, ts: Date.now(),
       recovery: num(g('recovery')),                 // Apple has no recovery score — leave blank or feed a readiness app
-      sleepHours: num(g('sleepHours')),
-      sleepPerf: num(g('sleepPerf')),
-      sleepTargetHours: num(g('sleepTargetHours')) || 8,
+      sleepHours: sleepHours,
+      sleepPerf: sleepHours != null ? Math.round(Math.min(100, (sleepHours / target) * 100)) : num(g('sleepPerf')),
+      sleepTargetHours: target,
       hrv: num(g('hrv')),
       rhr: num(g('rhr')),
-      bedtime: g('bedtime') || null,
-      wakeTime: g('wakeTime') || null,
+      bedtime: bedtime,
+      wakeTime: wakeTime,
       strain: num(g('strain')),
     };
     try {
