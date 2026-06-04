@@ -53,7 +53,13 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--font-ui),-apple-s
 .srcBadge{ float:right; font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:5px 11px; border-radius:var(--radius-pill); border:1px solid var(--border); background:var(--surface); color:var(--muted-strong); }
 
 /* Hero ring */
-.hero{ display:flex; align-items:center; gap:var(--space-6); flex-wrap:wrap; }
+.hero{ display:flex; align-items:center; justify-content:center; gap:var(--space-8); flex-wrap:wrap; text-align:center; }
+.sleepBig{ text-align:center; }
+.sleepBigLabel{ font-family:var(--font-mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+.sleepBigVal{ font-family:var(--font-display); font-weight:700; font-size:2.6rem; line-height:1; margin-top:6px; font-variant-numeric:tabular-nums; }
+.sleepBigScore{ font-size:12px; color:var(--brand-2); margin-top:6px; font-variant-numeric:tabular-nums; }
+.statusBlock{ text-align:center; margin-top:var(--space-5); }
+.statusBlock .statusLine{ max-width:44ch; margin-left:auto; margin-right:auto; }
 .recRing{ position:relative; width:150px; height:150px; display:grid; place-items:center; flex-shrink:0; overflow:visible; }
 .recRing[data-tone="good"]{ color:var(--pos); } .recRing[data-tone="watch"]{ color:var(--warn); } .recRing[data-tone="low"]{ color:var(--neg); } .recRing[data-tone="muted"]{ color:var(--muted); }
 .recRing::before{ content:''; position:absolute; inset:-18px; border-radius:50%; background:radial-gradient(closest-side, currentColor, transparent 70%); opacity:.32; filter:blur(14px); pointer-events:none; z-index:0; animation:recPulse 3.6s var(--ease) infinite; }
@@ -214,10 +220,13 @@ function render(){
       +(rec!=null?'<circle cx="75" cy="75" r="64" class="recFill" style="stroke-dasharray:'+circ+';stroke-dashoffset:'+(circ*(1-rec/100))+'"/>':'')
       +'</svg><div style="text-align:center"><div class="recNum">'+(rec!=null?Math.round(rec):'—')+(rec!=null?'<small>%</small>':'')+'</div><div class="recCap">'+(isEst(h)?'Recovery · est':'Recovery')+'</div></div></div>';
     const sleepVal = typeof h.sleepHours==='number' ? fmtHM(h.sleepHours)+(typeof h.sleepPerf==='number'?' <small>'+Math.round(h.sleepPerf)+'%</small>':'') : '—';
+    const sleepBig = typeof h.sleepHours==='number'
+      ? '<div class="sleepBig"><div class="sleepBigLabel">Sleep</div><div class="sleepBigVal">'+fmtHM(h.sleepHours)+'</div>'+(typeof h.sleepPerf==='number'?'<div class="sleepBigScore">'+Math.round(h.sleepPerf)+'% sleep score</div>':'')+'</div>'
+      : '';
     body='<section class="card"><span class="srcBadge">'+srcLabel(h.source)+'</span><p class="eyebrow">Today</p>'
-      +'<div class="hero">'+ring+'<div class="heroText"><div class="statusWord" data-tone="'+t+'">'+statusWord+'</div><p class="statusLine">'+statusLine+'</p></div></div>'
+      +'<div class="hero">'+ring+sleepBig+'</div>'
+      +'<div class="statusBlock"><div class="statusWord" data-tone="'+t+'">'+statusWord+'</div><p class="statusLine">'+statusLine+'</p></div>'
       +'<div class="statRow">'
-      +'<div class="stat"><div class="statLabel">Sleep</div><div class="statVal">'+sleepVal+'</div></div>'
       +'<div class="stat"><div class="statLabel">HRV</div><div class="statVal">'+(typeof h.hrv==='number'?Math.round(h.hrv)+'<small> ms</small>':'—')+'</div></div>'
       +'<div class="stat"><div class="statLabel">Resting HR</div><div class="statVal">'+(typeof h.rhr==='number'?Math.round(h.rhr)+'<small> bpm</small>':'—')+'</div></div>'
       +'</div></section>'
