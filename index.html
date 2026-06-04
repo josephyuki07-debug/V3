@@ -172,15 +172,20 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-ui), -ap
 .srcBadge { display:inline-flex; align-items:center; gap: 6px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--border); color: var(--muted-strong); }
 .srcDot { width: 6px; height: 6px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 8px var(--brand-glow); }
 .vitalsBody { display:flex; align-items:center; gap: var(--space-6); flex-wrap: wrap; }
-.recRing { position: relative; width: 132px; height: 132px; display:grid; place-items:center; flex-shrink:0; }
-.recRing svg { position:absolute; inset:0; transform: rotate(-90deg); }
+.recRing { position: relative; width: 132px; height: 132px; display:grid; place-items:center; flex-shrink:0; overflow: visible; }
+.recRing[data-tone="good"]  { color: var(--pos); }
+.recRing[data-tone="watch"] { color: var(--warn); }
+.recRing[data-tone="low"]   { color: var(--neg); }
+.recRing[data-tone="muted"] { color: var(--muted); }
+/* soft colored aura so the glow fades smoothly instead of clipping into a box */
+.recRing::before { content:''; position:absolute; inset:-18px; border-radius:50%; background: radial-gradient(closest-side, currentColor, transparent 70%); opacity:.32; filter: blur(13px); pointer-events:none; z-index:0; animation: recPulse 3.6s var(--ease) infinite; }
+.recRing[data-tone="muted"]::before { opacity:.10; animation:none; }
+@keyframes recPulse { 0%,100% { opacity:.26; } 50% { opacity:.42; } }
+@media (prefers-reduced-motion: reduce) { .recRing::before { animation:none; } }
+.recRing svg { position:absolute; inset:0; transform: rotate(-90deg); overflow: visible; z-index:1; }
 .recTrack { fill:none; stroke: var(--track); stroke-width: 9; }
-.recFill { fill:none; stroke: currentColor; stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset 700ms var(--ease-premium); filter: drop-shadow(0 0 10px currentColor); }
-.recRing[data-tone="good"] .recFill { color: var(--pos); }
-.recRing[data-tone="watch"] .recFill { color: var(--warn); }
-.recRing[data-tone="low"] .recFill { color: var(--neg); }
-.recRing[data-tone="muted"] .recFill { color: var(--muted); }
-.recNum { font-family: var(--font-display); font-weight: 600; font-size: 2.5rem; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.recFill { fill:none; stroke: currentColor; stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset 700ms var(--ease-premium); filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 0 12px currentColor); }
+.recNum { position: relative; z-index:1; color: var(--fg); font-family: var(--font-display); font-weight: 600; font-size: 2.5rem; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .recUnit { font-size: var(--text-base); color: var(--muted-strong); }
 .recCap { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
 .vMetrics { display:flex; flex-direction:column; gap: var(--space-3); flex:1; min-width: 150px; }
