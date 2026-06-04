@@ -68,9 +68,12 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--font-ui),-apple-s
 .recRing svg{ position:absolute; inset:0; transform:rotate(-90deg); overflow:visible; z-index:1; }
 .recTrack{ fill:none; stroke:var(--track); stroke-width:10; }
 .recFill{ fill:none; stroke:currentColor; stroke-width:10; stroke-linecap:round; transition:stroke-dashoffset 800ms var(--ease-premium); filter:drop-shadow(0 0 4px currentColor) drop-shadow(0 0 13px currentColor); }
-.recNum{ position:relative; z-index:1; color:var(--fg); font-family:var(--font-display); font-weight:700; font-size:2.9rem; line-height:1; font-variant-numeric:tabular-nums; }
-.recNum small{ font-size:1.1rem; color:var(--muted-strong); }
-.recCap{ position:relative; z-index:1; font-family:var(--font-mono); font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-top:3px; text-align:center; }
+.ringWrap{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+.ringSub{ font-family:var(--font-display); font-weight:700; font-size:1.2rem; font-variant-numeric:tabular-nums; color:var(--fg); }
+.recInner{ position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; justify-content:center; max-width:120px; }
+.recNum{ color:var(--fg); font-family:var(--font-display); font-weight:700; font-size:2.2rem; line-height:1; font-variant-numeric:tabular-nums; }
+.recNum small{ font-size:0.95rem; color:var(--muted-strong); }
+.recCap{ font-family:var(--font-mono); font-size:8px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-top:5px; text-align:center; white-space:nowrap; }
 .heroText{ flex:1; min-width:180px; }
 .statusWord{ font-family:var(--font-display); font-weight:700; font-size:var(--text-xl); }
 .statusWord[data-tone="good"]{ color:var(--pos); } .statusWord[data-tone="watch"]{ color:var(--warn); } .statusWord[data-tone="low"]{ color:var(--neg); }
@@ -137,6 +140,14 @@ function estRecovery(h){
 }
 function isEst(h){ return !!(h&&h.recovery==null&&estRecovery(h)!=null); }
 function tone(r){ if(r==null)return 'muted'; if(r>=67)return 'good'; if(r>=34)return 'watch'; return 'low'; }
+function sleepTone(p){ if(p==null)return 'muted'; if(p>=85)return 'good'; if(p>=60)return 'watch'; return 'low'; }
+function ringWrap(value, toneStr, cap, sub){
+  const circ=2*Math.PI*64;
+  const ring='<div class="recRing" data-tone="'+toneStr+'"><svg viewBox="0 0 150 150" aria-hidden><circle cx="75" cy="75" r="64" class="recTrack"/>'
+    +(value!=null?'<circle cx="75" cy="75" r="64" class="recFill" style="stroke-dasharray:'+circ+';stroke-dashoffset:'+(circ*(1-value/100))+'"/>':'')
+    +'</svg><div class="recInner"><div class="recNum">'+(value!=null?Math.round(value):'—')+(value!=null?'<small>%</small>':'')+'</div><div class="recCap">'+cap+'</div></div></div>';
+  return '<div class="ringWrap">'+ring+(sub?'<div class="ringSub">'+sub+'</div>':'')+'</div>';
+}
 function srcLabel(s){ return s==='apple'?'Apple Watch':s==='fitbit'?'Fitbit':s==='manual'?'Manual':s==='whoop'?'Whoop':'—'; }
 
 /* ---------- history ---------- */
@@ -216,15 +227,13 @@ function render(){
       : t==='good'?'You\'re well recovered and ready to push.'
       : t==='watch'?'Partially recovered — train smart today.'
       : 'Your body needs rest — keep it light.';
-    const ring='<div class="recRing" data-tone="'+t+'"><svg viewBox="0 0 150 150" aria-hidden><circle cx="75" cy="75" r="64" class="recTrack"/>'
-      +(rec!=null?'<circle cx="75" cy="75" r="64" class="recFill" style="stroke-dasharray:'+circ+';stroke-dashoffset:'+(circ*(1-rec/100))+'"/>':'')
-      +'</svg><div style="text-align:center"><div class="recNum">'+(rec!=null?Math.round(rec):'—')+(rec!=null?'<small>%</small>':'')+'</div><div class="recCap">'+(isEst(h)?'Recovery · est':'Recovery')+'</div></div></div>';
-    const sleepVal = typeof h.sleepHours==='number' ? fmtHM(h.sleepHours)+(typeof h.sleepPerf==='number'?' <small>'+Math.round(h.sleepPerf)+'%</small>':'') : '—';
-    const sleepBig = typeof h.sleepHours==='number'
-      ? '<div class="sleepBig"><div class="sleepBigLabel">Sleep</div><div class="sleepBigVal">'+fmtHM(h.sleepHours)+'</div>'+(typeof h.sleepPerf==='number'?'<div class="sleepBigScore">'+Math.round(h.sleepPerf)+'% sleep score</div>':'')+'</div>'
+    const recRing = ringWrap(rec, t, isEst(h)?'Rec · est':'Recovery', '');
+    const sTone = sleepTone(h.sleepPerf);
+    const sleepRing = (typeof h.sleepPerf==='number' || typeof h.sleepHours==='number')
+      ? ringWrap(typeof h.sleepPerf==='number'?h.sleepPerf:null, sTone, 'Sleep', typeof h.sleepHours==='number'?fmtHM(h.sleepHours):'')
       : '';
     body='<section class="card"><span class="srcBadge">'+srcLabel(h.source)+'</span><p class="eyebrow">Today</p>'
-      +'<div class="hero">'+ring+sleepBig+'</div>'
+      +'<div class="hero">'+recRing+sleepRing+'</div>'
       +'<div class="statusBlock"><div class="statusWord" data-tone="'+t+'">'+statusWord+'</div><p class="statusLine">'+statusLine+'</p></div>'
       +'<div class="statRow">'
       +'<div class="stat"><div class="statLabel">HRV</div><div class="statVal">'+(typeof h.hrv==='number'?Math.round(h.hrv)+'<small> ms</small>':'—')+'</div></div>'
