@@ -178,13 +178,13 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-ui), -ap
 .recRing[data-tone="low"]   { color: var(--neg); }
 .recRing[data-tone="muted"] { color: var(--muted); }
 /* soft colored aura so the glow fades smoothly instead of clipping into a box */
-.recRing::before { content:''; position:absolute; inset:-18px; border-radius:50%; background: radial-gradient(closest-side, currentColor, transparent 70%); opacity:.32; filter: blur(13px); pointer-events:none; z-index:0; animation: recPulse 3.6s var(--ease) infinite; }
+.recRing::before { content:''; position:absolute; inset:-18px; border-radius:50%; background: radial-gradient(closest-side, currentColor, transparent 70%); opacity:.32; filter: blur(14px); pointer-events:none; z-index:0; animation: recPulse 3.6s var(--ease) infinite; }
 .recRing[data-tone="muted"]::before { opacity:.10; animation:none; }
-@keyframes recPulse { 0%,100% { opacity:.26; } 50% { opacity:.42; } }
+@keyframes recPulse { 0%,100% { opacity:.26; } 50% { opacity:.44; } }
 @media (prefers-reduced-motion: reduce) { .recRing::before { animation:none; } }
 .recRing svg { position:absolute; inset:0; transform: rotate(-90deg); overflow: visible; z-index:1; }
-.recTrack { fill:none; stroke: var(--track); stroke-width: 9; }
-.recFill { fill:none; stroke: currentColor; stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset 700ms var(--ease-premium); filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 0 12px currentColor); }
+.recTrack { fill:none; stroke: var(--track); stroke-width: 10; }
+.recFill { fill:none; stroke: currentColor; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 700ms var(--ease-premium); filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 0 13px currentColor); }
 .recNum { position: relative; z-index:1; color: var(--fg); font-family: var(--font-display); font-weight: 600; font-size: 2.5rem; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .recUnit { font-size: var(--text-base); color: var(--muted-strong); }
 .recCap { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
