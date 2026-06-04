@@ -291,6 +291,7 @@ const APPS = [
   { file: 'supplements.html', name: 'Supplements', tag: 'Your stack + smart recommendations',   icon: '💊' },
   { file: 'stimulant.html',   name: 'Stimulants',  tag: 'Caffeine · peak & crash timing',        icon: '☕' },
   { file: 'whoop.html',       name: 'Fitness Band', tag: 'Whoop · Fitbit · Apple Watch sync',      icon: '🔋' },
+  { file: 'recovery.html',    name: 'Recovery',    tag: 'Readiness · sleep · trends',            icon: '🔄' },
   { file: 'water.html',       name: 'Water',       tag: 'Daily hydration target',                icon: '💧' },
   { file: 'creator.html',     name: 'Creator',     tag: 'Schedule · accounts · analytics',       icon: '🎬' },
   { file: 'goals.html',       name: 'Goals',       tag: 'Goals & streaks',                       icon: '🎯' },
@@ -504,6 +505,7 @@ function statFor(file){
     else if (file === 'water.html') { const s = lsGet('water_standalone_v1'); if (s && s.logs) { const n = s.logs[localDateKey()] || 0; return { value: String(n), label: (n === 1 ? 'drink' : 'drinks') + ' today' }; } }
     else if (file === 'stimulant.html') { const s = lsGet('stimulant_standalone_v1'); if (s && Array.isArray(s.logs)) { const k = localDateKey(); const mg = s.logs.filter(l => l && localDateKey(new Date(l.t)) === k).reduce((a,l)=>a+(Number(l.mg)||0),0); if (mg>0) return { value: mg + ' mg', label: 'caffeine today' }; } }
     else if (file === 'whoop.html') { const rec = estRecovery(health); if (rec != null) return { value: Math.round(rec) + '%', label: isEstRecovery(health) ? 'recovery · est' : 'recovery' }; }
+    else if (file === 'recovery.html') { const rec = estRecovery(health); if (rec != null) return { value: Math.round(rec) + '%', label: 'recovery' }; }
   } catch (e) {}
   return null;
 }
@@ -517,6 +519,7 @@ const ART = {
   'creator.html':'linear-gradient(135deg,#FBBF24,#F472B6)',
   'goals.html':'linear-gradient(135deg,#A78BFA,#22D3EE)',
   'progress.html':'linear-gradient(135deg,#34D399,#8B5CF6)',
+  'recovery.html':'linear-gradient(135deg,#22D3EE,#34D399)',
   'macros.html':'linear-gradient(135deg,#F59E0B,#EF4444)',
 };
 function artFor(file){ return ART[file] || 'linear-gradient(135deg,#8B5CF6,#22D3EE)'; }
