@@ -246,6 +246,24 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
 .cafLog b{ color:var(--fg); font-weight:600; }
 .cafLogX{ cursor:pointer; display:grid; place-items:center; width:18px; height:18px; border-radius:50%; color:var(--muted); font-size:13px; line-height:1; }
 .cafLogX:hover{ color:var(--low); background:rgba(251,113,133,.12); }
+.cafSearchWrap{ position:relative; margin-bottom:11px; }
+.cafSearchIn{ width:100%; background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:var(--radius-sm); padding:11px 14px 11px 38px; color:var(--fg); font-family:var(--ui); font-size:14px; }
+.cafSearchIn:focus{ outline:none; border-color:var(--accent); }
+.cafSearchIcon{ position:absolute; left:13px; top:50%; transform:translateY(-50%); color:var(--muted); display:flex; }
+.cafResults{ display:flex; flex-direction:column; gap:6px; }
+.cafResults:not(:empty){ margin-bottom:12px; }
+.cafResult{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 13px; border-radius:var(--radius-sm); border:1px solid var(--line); background:rgba(255,255,255,.02); cursor:pointer; }
+.cafResult:hover{ border-color:var(--accent); background:rgba(52,211,153,.08); }
+.cafResultName{ font-size:13.5px; color:var(--fg); }
+.cafResultMg{ font-family:var(--mono); font-size:11px; color:var(--accent2); white-space:nowrap; }
+.cafResultMg em{ color:var(--muted); font-style:normal; }
+.cafNoMatch{ font-family:var(--mono); font-size:11px; color:var(--muted); padding:4px 2px; }
+.cafAddRow{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+.cafAddRow input{ background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:10px; padding:10px 12px; color:var(--fg); font-family:var(--ui); font-size:13px; }
+.cafAddRow input:focus{ outline:none; border-color:var(--accent); }
+.cafAddName{ flex:1; min-width:120px; }
+.cafAddMg{ width:84px; }
+.cafAddBtn{ appearance:none; cursor:pointer; padding:0 18px; border:0; border-radius:10px; font-family:var(--mono); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:#04130c; background:var(--accent); }
 @media (prefers-reduced-motion:reduce){ .gem,.bigRing .glow,.tkLive .d,.tkTrack{ animation:none } }
 </style>
 </head>
@@ -528,12 +546,45 @@ function recommendations(){
  * Caffeine — quick-log + crash coaching
  * ============================================================ */
 const CAF_QUICK=[['Espresso',63],['Double esp.',126],['Coffee',95],['Cold brew',155],['Tea',47],['Energy drink',160]];
+let cafQuery='';
+/* full beverage DB (mirrors the Stimulant tracker) for the search */
+const CAF_DB=[
+  ['Espresso (single)',63],['Double espresso',126],['Brewed coffee (8 oz)',95],['Brewed coffee (12 oz)',140],
+  ['Drip coffee (16 oz)',190],['Cold brew (16 oz)',205],['Nitro cold brew (16 oz)',280],['Americano',154],
+  ['Latte',126],['Cappuccino',126],['Flat white',130],['Mocha',152],['Instant coffee (8 oz)',62],['Decaf coffee (8 oz)',3],
+  ['Black tea',47],['Green tea',28],['Matcha (1 tsp)',70],['White tea',15],['Oolong tea',38],['Chai latte',50],
+  ['Bottled iced tea',25],['Yerba mate',85],
+  ['Red Bull (8.4 oz)',80],['Red Bull (12 oz)',114],['Monster (16 oz)',160],['Monster Ultra (16 oz)',140],
+  ['Bang (16 oz)',300],['Celsius (12 oz)',200],['Rockstar (16 oz)',160],['Reign (16 oz)',300],['Prime Energy (12 oz)',200],
+  ['5-Hour Energy',200],['G Fuel (1 scoop)',150],
+  ['Coca-Cola (12 oz)',34],['Diet Coke (12 oz)',46],['Pepsi (12 oz)',38],['Mountain Dew (12 oz)',54],['Dr Pepper (12 oz)',41],
+  ['Pre-workout (1 scoop)',200],['Caffeine pill (100 mg)',100],['Caffeine pill (200 mg)',200],
+  ['Dark chocolate (1 oz)',24],['Hot chocolate',5],['Espresso martini',100],
+].map(d=>({name:d[0],mg:d[1]}));
+function customDrinks(){ const s=readLS('stimulant_standalone_v1'); return (s&&Array.isArray(s.custom))?s.custom.map(c=>({name:c.name,mg:c.mg})):[]; }
+function allDrinks(){ return customDrinks().concat(CAF_DB); }
+function caffMostUsed(n){ const freq={},mg={}; stimLogs().forEach(l=>{ const nm=l.name||'Caffeine'; freq[nm]=(freq[nm]||0)+1; mg[nm]=l.mg; }); return Object.keys(freq).sort((a,b)=>freq[b]-freq[a]).slice(0,n).map(nm=>({name:nm,mg:mg[nm]})); }
+// Quick-log = your customs + most-used, topped up with sensible defaults.
+function caffQuickList(){ const out=[],seen={}; const add=d=>{ const k=String(d.name).toLowerCase(); if(!seen[k]&&d.mg!=null){ seen[k]=1; out.push({name:d.name,mg:d.mg}); } };
+  customDrinks().forEach(add); caffMostUsed(6).forEach(add);
+  if(out.length<5) CAF_QUICK.forEach(c=>{ if(out.length<6) add({name:c[0],mg:c[1]}); });
+  return out.slice(0,8); }
+function cafResultsHtml(q){ q=(q||'').trim().toLowerCase(); if(!q) return '';
+  const matches=allDrinks().filter(d=>String(d.name).toLowerCase().includes(q)).slice(0,8);
+  if(!matches.length) return '<div class="cafNoMatch">No match — add it as a custom below ↓</div>';
+  return matches.map(d=>'<div class="cafResult" data-caf="'+d.mg+'" data-cafname="'+esc(d.name)+'"><span class="cafResultName">'+esc(d.name)+'</span><span class="cafResultMg">'+d.mg+'mg <em>+'+caffLift(d.mg)+'</em></span></div>').join(''); }
+function addCustomCaff(name,mg){ const s=readLS('stimulant_standalone_v1')||{logs:[],custom:[]}; if(!Array.isArray(s.custom))s.custom=[]; if(!Array.isArray(s.logs))s.logs=[];
+  name=String(name).trim()||'Custom'; mg=Math.max(0,Math.round(+mg||0));
+  if(!s.custom.some(c=>String(c.name).toLowerCase()===name.toLowerCase())) s.custom.push({name:name,mg:mg,cat:'custom'});
+  s.logs.push({id:'c_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:name,mg:mg,t:Date.now()});
+  cafQuery=''; saveStim(s); }
+function bindCaf(){ const s=document.getElementById('cafSearch'); if(!s)return; s.addEventListener('input',()=>{ cafQuery=s.value; const r=document.getElementById('cafResults'); if(r)r.innerHTML=cafResultsHtml(cafQuery); }); }
 function saveStim(s){ try{ localStorage.setItem('stimulant_standalone_v1',JSON.stringify(s)); }catch(e){} if(window.PatronDB&&PatronDB.isCloud())PatronDB.set('stimulant',s); render(); }
 function logCaffeine(mg,name){
   const s=readLS('stimulant_standalone_v1')||{logs:[],custom:[]};
   if(!Array.isArray(s.logs))s.logs=[];
   s.logs.push({id:'c_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:name,mg:mg,t:Date.now()});
-  saveStim(s);
+  cafQuery=''; saveStim(s);
 }
 function caffTodayLogs(){ const k=dKey(); return stimLogs().filter(l=>dayKey(new Date(l.t))===k).sort((a,b)=>b.t-a.t); }
 function removeCaffLog(id){ const s=readLS('stimulant_standalone_v1')||{logs:[],custom:[]}; if(Array.isArray(s.logs))s.logs=s.logs.filter(l=>String(l.id)!==String(id)); saveStim(s); }
@@ -697,7 +748,7 @@ function render(){
   const cafSec='<div class="sec"><span class="secNum">03</span><span class="secTitle">Caffeine</span><span class="secLine"></span></div>'+caffeineCardHtml();
 
   document.getElementById('app').innerHTML=head+srcRow+feelBar+mCard+tk+nowSec+daySec+cafSec;
-  bindScrub(); bindFeel();
+  bindScrub(); bindFeel(); bindCaf();
 }
 function feelBarHtml(){
   const f=latestFeelToday(); const val=f!=null?f:Math.round(energyAt(nowT()).e);
@@ -715,7 +766,8 @@ function caffeineCardHtml(){
   const pct=Math.min(100,Math.round(consumed/ceil*100));
   const barCls = consumed>ceil?'over':(consumed>ceil*0.75?'warn2':'');
   const tip=caffeineCoach();
-  const chips=CAF_QUICK.map(c=>{ const lift=caffLift(c[1]); return '<button class="cafChip" data-caf="'+c[1]+'" data-cafname="'+esc(c[0])+'"><span class="cafChipName">'+esc(c[0])+'</span><span class="cafChipMg">'+c[1]+'mg <em>+'+lift+'</em></span></button>'; }).join('');
+  const chips=caffQuickList().map(d=>{ const lift=caffLift(d.mg); return '<button class="cafChip" data-caf="'+d.mg+'" data-cafname="'+esc(d.name)+'"><span class="cafChipName">'+esc(d.name)+'</span><span class="cafChipMg">'+d.mg+'mg <em>+'+lift+'</em></span></button>'; }).join('');
+  const searchIcon='<span class="cafSearchIcon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>';
   return '<div class="card cafCard">'
     +'<div class="cafHero"><div class="cafHeroV">'+consumed+'<small> mg today</small></div><div class="cafCeil">'+board+'mg on board · ceiling '+ceil+'mg</div></div>'
     +'<div class="cafBar"><div class="cafBarFill '+barCls+'" style="width:'+pct+'%"></div></div>'
@@ -725,7 +777,10 @@ function caffeineCardHtml(){
     +'<div class="cafS"><div class="cafSV">'+caffSweetDose()+'<small> mg</small></div><div class="cafSL">Ideal dose</div></div>'
     +'</div>'
     +'<p class="cafQL">Quick log <span>· +N = energy lift</span></p>'
+    +'<div class="cafSearchWrap">'+searchIcon+'<input class="cafSearchIn" id="cafSearch" type="text" placeholder="Search 40+ drinks…" value="'+esc(cafQuery)+'" autocomplete="off"></div>'
+    +'<div class="cafResults" id="cafResults">'+cafResultsHtml(cafQuery)+'</div>'
     +'<div class="cafChips">'+chips+'</div>'
+    +'<div class="cafAddRow"><input class="cafAddName" id="cafCustName" placeholder="Add a custom drink…"><input class="cafAddMg" id="cafCustMg" type="number" inputmode="numeric" placeholder="mg"><button class="cafAddBtn" data-addcust="1">Add</button></div>'
     + caffLogsHtml()
     +'<div class="cafTip'+(tip.warn?' warn':'')+'"><span class="cafTipIcon">'+tip.icon+'</span><span class="cafTipTxt">'+tip.txt+'</span></div>'
     +'</div>';
@@ -848,6 +903,7 @@ document.addEventListener('click',e=>{
   if(e.target.closest('#mSave')){ saveManual(); return; }
   const rm=e.target.closest('[data-rmcaf]'); if(rm){ removeCaffLog(rm.dataset.rmcaf); return; }
   const cc=e.target.closest('[data-clearcaf]'); if(cc){ if(confirm('Clear all of today’s caffeine?')) clearCaffToday(); return; }
+  const ac=e.target.closest('[data-addcust]'); if(ac){ const n=document.getElementById('cafCustName'), m=document.getElementById('cafCustMg'); const mg=Math.round(+((m&&m.value)||0)); if(!mg||mg<=0){ alert('Enter the caffeine amount in mg.'); return; } addCustomCaff((n&&n.value)||'Custom', mg); return; }
   const cf=e.target.closest('[data-caf]'); if(cf){ logCaffeine(+cf.dataset.caf, cf.dataset.cafname||'Caffeine'); return; }
   const rt=e.target.closest('[data-rate]'); if(rt){ captureRhr(); const f=rt.dataset.rate,v=+rt.dataset.val; draft[f]=(draft[f]===v?null:v); render(); return; }
   const wk=e.target.closest('[data-wake]'); if(wk){ captureRhr(); draft.wakeTime=(draft.wakeTime===wk.dataset.wake?null:wk.dataset.wake); render(); return; }
