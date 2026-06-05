@@ -191,7 +191,38 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
 .miniIn{ width:90px; background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:10px; padding:9px 11px; color:var(--fg); font-family:var(--ui); font-size:14px; }
 .miniIn:focus{ outline:none; border-color:var(--accent); }
 @media (max-width:520px){ .rateLab{ width:100%; } }
-@media (prefers-reduced-motion:reduce){ .gem,.bigRing .glow,.tkLive .d{ animation:none } }
+
+/* nasdaq-style scrolling ticker */
+.tkTrack{ display:flex; align-items:center; animation:marquee 36s linear infinite; will-change:transform; }
+.ticker:hover .tkTrack{ animation-play-state:paused; }
+@keyframes marquee{ from{ transform:translateX(0) } to{ transform:translateX(-50%) } }
+
+/* feel-now bar */
+.feelBar{ display:flex; align-items:center; gap:18px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); padding:16px 22px; margin-bottom:20px; flex-wrap:wrap; }
+.feelHead{ flex-shrink:0; }
+.feelTitle{ font-family:var(--serif); font-style:italic; font-size:18px; }
+.feelNote{ font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-top:3px; }
+.feelNote.ready{ color:var(--accent); }
+.feelSliderWrap{ flex:1; min-width:180px; display:flex; align-items:center; gap:16px; }
+.feelSlider{ -webkit-appearance:none; appearance:none; flex:1; height:8px; border-radius:99px; background:linear-gradient(90deg,var(--low),var(--warn),var(--accent)); outline:none; }
+.feelSlider::-webkit-slider-thumb{ -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:#eafff4; border:3px solid var(--accent); cursor:pointer; box-shadow:0 0 12px var(--glow); }
+.feelSlider::-moz-range-thumb{ width:22px; height:22px; border-radius:50%; background:#eafff4; border:3px solid var(--accent); cursor:pointer; }
+.feelPct{ font-family:var(--serif); font-style:italic; font-weight:600; font-size:32px; min-width:64px; text-align:right; }
+
+/* caffeine card */
+.cafTop{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:16px; }
+.cafStat{ display:flex; flex-direction:column; }
+.cafStatV{ font-family:var(--serif); font-style:italic; font-size:24px; }
+.cafStatL{ font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-top:2px; }
+.cafChips{ display:flex; gap:8px; flex-wrap:wrap; }
+.cafChip{ appearance:none; cursor:pointer; padding:10px 14px; border-radius:var(--pill); border:1px solid var(--line2); background:rgba(52,211,153,.06); color:var(--accent2); font-family:var(--mono); font-size:12px; transition:all .15s var(--ease); }
+.cafChip:hover{ background:rgba(52,211,153,.14); }
+.cafTip{ display:flex; gap:11px; align-items:flex-start; margin-top:16px; padding:13px 15px; border-radius:var(--radius-sm); background:rgba(255,255,255,.02); border:1px solid var(--line); }
+.cafTip.warn{ border-color:rgba(251,191,36,.3); background:rgba(251,191,36,.06); }
+.cafTipIcon{ font-size:17px; flex-shrink:0; }
+.cafTipTxt{ font-size:14px; line-height:1.5; color:var(--muted2); }
+.cafTipTxt b{ color:var(--fg); }
+@media (prefers-reduced-motion:reduce){ .gem,.bigRing .glow,.tkLive .d,.tkTrack{ animation:none } }
 </style>
 </head>
 <body>
@@ -212,8 +243,11 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
  * All scores reuse the suite's real calculation logic.
  * ============================================================ */
 function readLS(k){ try{ const r=localStorage.getItem(k); return r?JSON.parse(r):null; }catch(e){ return null; } }
-function health(){ const d=readLS('patron_health_v1'); return (d&&d.connected)?d:null; }
-function profile(){ return readLS('patron_profile_v1'); }
+// per-render caches (the energy curve reads these hundreds of times) — cleared at the top of render()
+let _hl,_prof,_stim,_feelC;
+function clearCaches(){ _hl=undefined; _prof=undefined; _stim=undefined; _feelC=undefined; }
+function health(){ if(_hl!==undefined)return _hl; const d=readLS('patron_health_v1'); _hl=(d&&d.connected)?d:null; return _hl; }
+function profile(){ if(_prof!==undefined)return _prof; _prof=readLS('patron_profile_v1'); return _prof; }
 function clamp(x,a,b){ return Math.max(a,Math.min(b,x)); }
 function clamp01(x){ return Math.max(0,Math.min(1,x)); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -253,13 +287,32 @@ const KA=4.0;
 function halfLifeH(){ const p=profile(); let hl=5; if(p){ if(p.sex==='female')hl+=0.5; if(typeof p.age==='number'&&p.age>=50)hl+=0.7; } return hl; }
 function ke(){ return Math.LN2/halfLifeH(); }
 function doseAmount(mg,h){ if(h<0)return 0; const k=ke(); if(Math.abs(KA-k)<1e-9)return 0; const a=mg*KA/(KA-k)*(Math.exp(-k*h)-Math.exp(-KA*h)); return Math.max(0,a); }
-function stimLogs(){ const s=readLS('stimulant_standalone_v1'); return (s&&Array.isArray(s.logs))?s.logs:[]; }
+function stimLogs(){ if(_stim!==undefined)return _stim; const s=readLS('stimulant_standalone_v1'); _stim=(s&&Array.isArray(s.logs))?s.logs:[]; return _stim; }
 function bodyAt(tMs){ return stimLogs().reduce((sum,l)=>sum+doseAmount(l.mg,(tMs-l.t)/3600000),0); }
 function caffeineNowMg(){ return bodyAt(Date.now()); }
 
-/* ---- hydration ---- */
-function drinksToday(){ const s=readLS('water_standalone_v1'); if(!s||!s.logs)return 0; const d=new Date(); const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); return s.logs[k]||0; }
+/* ---- hydration (optional input) ---- */
+function dKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function drinksToday(){ const s=readLS('water_standalone_v1'); if(!s||!s.logs)return 0; return s.logs[dKey()]||0; }
 function waterTarget(){ const p=profile(); if(p&&typeof p.weightKg==='number'&&p.weightKg>0){ const litres=p.weightKg*0.033; return Math.max(6,Math.round(litres/0.25)); } return 8; }
+function waterLoggedToday(){ return drinksToday()>0; }
+
+/* ---- macros (optional input) ---- */
+function macrosToday(){ const s=readLS('macros_standalone_v1'); const log=(s&&s[dKey()])||null; if(!Array.isArray(log)||!log.length)return null; return log.reduce((t,e)=>({cal:t.cal+(+e.cal||0),p:t.p+(+e.p||0),c:t.c+(+e.c||0),f:t.f+(+e.f||0)}),{cal:0,p:0,c:0,f:0}); }
+function proteinTarget(){ const p=profile(); const wt=(p&&typeof p.weightKg==='number'&&p.weightKg>0)?p.weightKg:75; return Math.round(wt*1.8); }
+function macrosScore(){ const m=macrosToday(); if(!m)return null; return Math.round(clamp01(m.p/proteinTarget())*100); } // protein-adherence as the macro proxy
+
+/* ---- gym (optional input) ---- */
+function gymLoggedToday(){ const d=readLS('po_coach_workout_done'); return !!(d&&d[dKey()]); }
+
+/* ---- profile stats for the header ticker ---- */
+function profileStats(){ const p=profile()||{}; const out=[]; const imperial=p.units==='imperial';
+  if(typeof p.heightCm==='number') out.push(['Height', imperial?Math.round(p.heightCm/2.54)+'in':Math.round(p.heightCm)+'cm']);
+  if(typeof p.weightKg==='number') out.push(['Weight', imperial?Math.round(p.weightKg/0.45359237)+'lb':p.weightKg+'kg']);
+  if(p.sex) out.push(['Sex', p.sex==='female'?'F':p.sex==='male'?'M':String(p.sex)]);
+  if(p.workoutsPerWeek!=null&&p.workoutsPerWeek!=='') out.push(['Train', p.workoutsPerWeek+'x/wk']);
+  return out;
+}
 
 /* ---- times ---- */
 function parseHM(s){ if(!s)return null; const m=String(s).match(/(\d{1,2}):(\d{2})/); if(!m)return null; return (+m[1])+(+m[2])/60; }
@@ -270,18 +323,37 @@ function tToMs(t){ const d=new Date(); d.setHours(0,0,0,0); return d.getTime()+t
 
 /* ---- scores ---- */
 function sleepPerfOf(h){ if(!h)return null; if(typeof h.sleepPerf==='number')return Math.min(100,h.sleepPerf); if(typeof h.sleepHours==='number')return Math.round(clamp01(h.sleepHours/(h.sleepTargetHours||8))*100); return null; }
+/* Daily overall score. Recovery + Sleep always count; Water, Macros and Gym are
+ * OPTIONAL — they only join the blend on days you actually logged them (no penalty
+ * for skipping). Weights renormalise over whatever's present. */
 function overall(){
   const h=health();
-  const rec=estRecovery(h);
-  const sp=sleepPerfOf(h);
-  const hyd=Math.round(clamp01(drinksToday()/waterTarget())*100);
   const parts=[],w=[],labels=[];
-  if(rec!=null){ parts.push(rec); w.push(0.5); labels.push(['Recovery',rec]); }
-  if(sp!=null){ parts.push(sp); w.push(0.3); labels.push(['Sleep',sp]); }
-  parts.push(hyd); w.push(0.2); labels.push(['Hydration',hyd]);
+  const rec=estRecovery(h);   if(rec!=null){ parts.push(rec); w.push(0.45); labels.push(['Recovery',rec,true]); }
+  const sp=sleepPerfOf(h);    if(sp!=null){ parts.push(sp); w.push(0.30); labels.push(['Sleep',sp,true]); }
+  if(waterLoggedToday()){ const hyd=Math.round(clamp01(drinksToday()/waterTarget())*100); parts.push(hyd); w.push(0.10); labels.push(['Hydration',hyd,false]); }
+  const ms=macrosScore(); if(ms!=null){ parts.push(ms); w.push(0.10); labels.push(['Protein',ms,false]); }
+  if(gymLoggedToday()){ parts.push(100); w.push(0.05); labels.push(['Trained',100,false]); }
+  if(!parts.length) return { score:null, labels:[] };
   const sw=w.reduce((a,b)=>a+b,0); let s=0; for(let i=0;i<parts.length;i++)s+=parts[i]*w[i];
-  return { score:Math.round(s/sw), labels };
+  let score=Math.round(s/sw);
+  // Blend + learn: if you've set "how I feel" today, nudge the score toward it.
+  const f=latestFeelToday(); if(f!=null) score=Math.round(score*0.6+f*0.4);
+  return { score, labels };
 }
+
+/* ---- feel-check store (the little "how I feel right now" slider) ---- */
+const FLOG='peak_feel_v1';
+function loadFeel(){ if(_feelC!==undefined)return _feelC; const r=readLS(FLOG); _feelC=(r&&Array.isArray(r.checks))?r:{checks:[]}; return _feelC; }
+function saveFeel(f){ _feelC=f; try{ localStorage.setItem(FLOG,JSON.stringify(f)); }catch(e){} if(window.PatronDB&&PatronDB.isCloud())PatronDB.set('peakfeel',f); }
+function addFeel(pct){ const f=loadFeel(); f.checks.push({t:Date.now(),pct:pct,pred:Math.round(energyRaw(nowT()))}); if(f.checks.length>2000)f.checks.shift(); saveFeel(f); }
+function latestFeelToday(){ const f=loadFeel(); const today=dKey(); let best=null; for(const c of f.checks){ if(dayKey(new Date(c.t))===today)best=c; } return best?best.pct:null; }
+function feelDays(){ const f=loadFeel(); const set={}; f.checks.forEach(c=>{ set[dayKey(new Date(c.t))]=1; }); return Object.keys(set).length; }
+// Personal calibration: average gap between how you FELT and what we PREDICTED,
+// applied gradually — full strength only after ~30 days of check-ins.
+function personalBias(){ const f=loadFeel(); if(f.checks.length<3)return 0; let s=0,n=0; f.checks.forEach(c=>{ if(typeof c.pred==='number'&&typeof c.pct==='number'){ s+=(c.pct-c.pred); n++; } }); if(!n)return 0; return clamp(s/n,-25,25); }
+function calibStrength(){ return Math.min(1, feelDays()/30); }
+function personalAdj(){ return personalBias()*calibStrength(); }
 function toneOf(v){ if(v==null)return {c:'var(--muted)',word:'—'}; if(v>=80)return {c:'var(--accent)',word:'Prime'}; if(v>=67)return {c:'var(--accent)',word:'Solid'}; if(v>=45)return {c:'var(--warn)',word:'Moderate'}; if(v>=30)return {c:'var(--warn)',word:'Low'}; return {c:'var(--low)',word:'Depleted'}; }
 
 /* ---- energy curve model ----
@@ -293,12 +365,22 @@ function shape(t,wake,bed){
   const e=1.04*Math.exp(-Math.pow(t-(bed-3),2)/(2*2.7*2.7));
   return Math.max(m,e);
 }
+/* Caffeine net effect: a boost while it's in your system, then a rebound DIP
+ * below baseline as it clears (adenosine rebound = the crash). */
+function caffNet(t){
+  const cur=bodyAt(tToMs(t));
+  let mx=cur; for(let dt=0.5; dt<=5; dt+=0.5){ const b=bodyAt(tToMs(t-dt)); if(b>mx)mx=b; }
+  const boost=Math.min(22, cur*0.14);
+  const rebound=Math.min(13, Math.max(0, mx-cur)*0.10);
+  return boost-rebound;
+}
+// raw prediction (no personal calibration) — used to measure the feel-gap
+function energyRaw(t){ const {wake,bed}=wakeBed(); const rs=recScale(); const base=clamp((0.06+shape(t,wake,bed)*0.94)*rs*100,2,100); return clamp(base+caffNet(t),1,100); }
 function energyAt(t){
-  const {wake,bed}=wakeBed();
-  const rs=recScale();
-  const base=clamp((0.06+shape(t,wake,bed)*0.94)*rs*100,2,100);
-  const caf=Math.min(22,bodyAt(tToMs(t))*0.14);
-  return { base, caf, e:clamp(base+caf,2,100) };
+  const {wake,bed}=wakeBed(); const rs=recScale();
+  const base=clamp((0.06+shape(t,wake,bed)*0.94)*rs*100+personalAdj(),1,100);
+  const caf=caffNet(t);
+  return { base, caf, e:clamp(base+caf,1,100) };
 }
 function buildCurve(){ const a=[]; for(let t=0;t<=24;t+=0.5){ const v=energyAt(t); a.push({t,base:v.base,caf:v.caf,e:v.e}); } return a; }
 function peakOf(curve){ const {wake,bed}=wakeBed(); let best=curve[0]; for(const p of curve){ const inDay=bed>wake?(p.t>=wake&&p.t<=bed):(p.t>=wake||p.t<=bed); if(inDay&&p.e>best.e)best=p; } if(best.e<=2){ for(const p of curve)if(p.e>best.e)best=p; } return best; }
@@ -327,14 +409,15 @@ function chartSvg(){
     for(let h=0;h<n;h++){ const v=energyAt(h+0.5).e; const x=xOf(h+0.5)-bw/2, y=yOf(v); const isNow=Math.floor(nowT())===h;
       body+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(CH-PADB-y).toFixed(1)+'" rx="3" fill="'+(isNow?'#FBBF24':'#34D399')+'" opacity="'+(isNow?'.9':'.55')+'"/>'; }
   } else if(chartType==='stack'){
+    // base = your energy without caffeine (green); total line = with caffeine (amber).
+    // Caffeine can now go negative (the crash), so we just draw both lines + base area.
     const baseP=CURVE.map(p=>[xOf(p.t),yOf(p.base)]);
     const totP=CURVE.map(p=>[xOf(p.t),yOf(p.e)]);
     const baseLine=smoothPath(baseP);
     const totLine=smoothPath(totP);
     body+='<path d="'+baseLine+' L'+CW+' '+(CH-PADB)+' L0 '+(CH-PADB)+' Z" fill="url(#area)"/>';
-    body+='<path d="'+totLine+' '+baseP.slice().reverse().map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+' Z" fill="url(#caf)"/>';
-    body+='<path d="'+baseLine+'" fill="none" stroke="#34D399" stroke-width="2" style="filter:drop-shadow(0 0 4px rgba(52,211,153,.6))"/>';
-    body+='<path d="'+totLine+'" fill="none" stroke="#FBBF24" stroke-width="1.6" opacity=".8"/>';
+    body+='<path d="'+baseLine+'" fill="none" stroke="#34D399" stroke-width="2" stroke-dasharray="4 4" opacity=".8" style="filter:drop-shadow(0 0 3px rgba(52,211,153,.5))"/>';
+    body+='<path d="'+totLine+'" fill="none" stroke="#FBBF24" stroke-width="2.2" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(251,191,36,.6))"/>';
   } else {
     const pts=CURVE.map(p=>[xOf(p.t),yOf(p.e)]);
     const line=smoothPath(pts);
@@ -398,32 +481,64 @@ function recommendations(){
   const h=health(); const rec=estRecovery(h); const out=[];
   if(rec!=null){ const adv=rec>=67?'Stack your hardest training or thinking session inside the peak window.':rec>=40?'Train smart — quality over max intensity today.':'Go easy: light movement, hydration, protect tonight’s sleep.';
     out.push([false,'Recovery '+Math.round(rec)+'%.',adv]); }
-  const dr=drinksToday(); const tgt=waterTarget();
-  if(dr===0) out.push([true,'No hydration logged.','A glass of water nudges focus — log it in Water, the cheapest move in your stack.']);
-  else if(dr<tgt) out.push([false,dr+' / '+tgt+' drinks.','You’re behind on water — top up to hold your afternoon energy.']);
-  else out.push([false,'Hydration on target.','Nicely topped up — that protects your focus curve.']);
-  const caf=caffeineNowMg(); const {bed}=wakeBed(); const hrsToBed=((bed-nowT())+24)%24;
-  if(caf>50 && hrsToBed<8 && hrsToBed>0) out.push([true,Math.round(caf)+'mg caffeine on board.','It’s within ~'+Math.round(hrsToBed)+'h of bed — cut off now to protect sleep.']);
-  else if(caf<20 && nowT()>=wakeBed().wake && nowT()<wakeBed().wake+4) out.push([false,'No caffeine yet.','A coffee in your morning rise would lift the first peak.']);
+  if(waterLoggedToday()){ const dr=drinksToday(),tgt=waterTarget();
+    if(dr<tgt) out.push([false,dr+' / '+tgt+' drinks.','You’re behind on water — top up to hold your afternoon energy.']);
+    else out.push([false,'Hydration on target.','Nicely topped up — that protects your focus curve.']);
+  }
+  const ms=macrosScore(); if(ms!=null){ const m=macrosToday(); out.push([ms<60,'Protein '+m.p+'g / '+proteinTarget()+'g.', ms<60?'Behind on protein — it’s the lever for recovery + muscle.':'Solid protein intake today.']); }
+  if(gymLoggedToday()) out.push([false,'Trained today. ✔','Session logged — recovery tonight is what banks the gains.']);
   if(!out.length) out.push([false,'Add your vitals.','Pick a source above and your day fills in.']);
   return out;
 }
 
 /* ============================================================
- * Ticker
+ * Caffeine — quick-log + crash coaching
+ * ============================================================ */
+const CAF_QUICK=[['Espresso',63],['Double esp.',126],['Coffee',95],['Cold brew',155],['Tea',47],['Energy drink',160]];
+function logCaffeine(mg,name){
+  const s=readLS('stimulant_standalone_v1')||{logs:[],custom:[]};
+  if(!Array.isArray(s.logs))s.logs=[];
+  s.logs.push({id:'c_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:name,mg:mg,t:Date.now()});
+  try{ localStorage.setItem('stimulant_standalone_v1',JSON.stringify(s)); }catch(e){}
+  if(window.PatronDB&&PatronDB.isCloud())PatronDB.set('stimulant',s);
+  render();
+}
+// find the lowest point of the curve in the next `hrs` hours → the upcoming dip/crash
+function upcomingLow(fromT,hrs){ let lowT=fromT,lowE=energyAt(fromT).e; for(let t=fromT; t<=fromT+hrs; t+=0.25){ const e=energyAt(t).e; if(e<lowE){ lowE=e; lowT=t; } } return {t:lowT,e:lowE}; }
+function caffeineCoach(){
+  const caf=caffeineNowMg(); const {wake,bed}=wakeBed(); const t=nowT();
+  const hrsToBed=((bed-t)+24)%24;
+  if(caf>50 && hrsToBed>0 && hrsToBed<8) return {warn:true,icon:'⚠️',txt:'<b>'+Math.round(caf)+'mg on board</b>, ~'+Math.round(hrsToBed)+'h from bed. Stop now — more caffeine will cost you tonight’s sleep.'};
+  const dip=upcomingLow(t+0.5,4);
+  if(caf<40 && dip.e<58 && (dip.t-t)<4){ const crash=upcomingLow(dip.t+1.5,5); return {warn:false,icon:'☕',txt:'Energy dips to <b>'+Math.round(dip.e)+'</b> around <b>'+clockOf(dip.t)+'</b>. A <b>double espresso</b> now lifts it — but expect a comedown near <b>'+clockOf(crash.t)+'</b>.'}; }
+  if(caf<20 && t>=wake && t<wake+4) return {warn:false,icon:'☕',txt:'You’re in your morning rise — a coffee now sharpens the first peak.'};
+  if(caf>0) return {warn:false,icon:'✅',txt:'<b>'+Math.round(caf)+'mg</b> in your system. Timing looks fine — no crash risk before bed.'};
+  return {warn:false,icon:'☕',txt:'No caffeine logged. Tap a drink below and the curve updates with its lift + crash.'};
+}
+
+/* ============================================================
+ * Ticker (nasdaq-style)
  * ============================================================ */
 function tickerItems(){
   const h=health(); const items=[];
+  // who you are
+  profileStats().forEach(s=>items.push(s));
+  // vitals
   const rec=estRecovery(h);
-  items.push(['HRV', (h&&typeof h.hrv==='number')?Math.round(h.hrv)+'ms':'noisy']);
-  items.push(['Hydration', String(drinksToday())]);
+  items.push(['Source', srcName((h&&h.source)||'manual')]);
   items.push(['Recovery', rec!=null?Math.round(rec)+'%':'—']);
+  items.push(['HRV', (h&&typeof h.hrv==='number')?Math.round(h.hrv)+'ms':'—']);
   const sp=sleepPerfOf(h);
-  if(h&&typeof h.sleepHours==='number'){ const debt=Math.max(0,(h.sleepTargetHours||8)-h.sleepHours); items.push(['Sleep debt', (Math.round(debt*10)/10)+'h']); }
+  if(h&&typeof h.sleepHours==='number'){ const debt=Math.max(0,(h.sleepTargetHours||8)-h.sleepHours); items.push(['Sleep debt',(Math.round(debt*10)/10)+'h']); }
   else items.push(['Sleep', sp!=null?sp+'%':'—']);
-  items.push(['Caffeine', Math.round(caffeineNowMg())+'mg']);
+  // optional logs (only if used today)
+  if(waterLoggedToday()) items.push(['Water', drinksToday()+'/'+waterTarget()]);
+  const m=macrosToday(); if(m) items.push(['Protein', m.p+'g']);
+  if(gymLoggedToday()) items.push(['Gym','✔ done']);
+  if(caffeineNowMg()>0) items.push(['Caffeine', Math.round(caffeineNowMg())+'mg']);
   return items;
 }
+function srcName(s){ return s==='apple'?'Apple Watch':s==='whoop'?'Whoop':s==='fitbit'?'Fitbit':'Manual'; }
 
 /* ============================================================
  * Render
@@ -447,6 +562,7 @@ const SLEEP_HRS=[5,5.5,6,6.5,7,7.5,8,8.5,9,9.5];
 function hmToFloat(s){ if(!s)return null; const [h,m]=String(s).split(':').map(Number); return h+(m||0)/60; }
 function deriveBed(wakeTime,hours){ if(!wakeTime||hours==null)return null; const [wh,wm]=wakeTime.split(':').map(Number); let mins=(wh*60+(wm||0))-Math.round(hours*60); mins=((mins%1440)+1440)%1440; return String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0'); }
 function render(){
+  clearCaches();
   const h=health();
   const dateStr=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   CURVE=buildCurve(); PEAK=peakOf(CURVE);
@@ -464,30 +580,33 @@ function render(){
 
   const srcRow='<div class="srcRow"><span class="srcLab">Source</span>'+pill('manual','Manual')+pill('whoop','Whoop')+pill('apple','Apple Watch')+'</div>';
 
+  // tiny always-on "how I feel right now" bar (blends now + calibrates over 30 days)
+  const feelBar = feelBarHtml();
+
   // Inline daily check-in card — shows whenever Manual is the chosen source.
   const mCard = (cur==='manual') ? manualCard(h) : '';
 
   if(!h){
-    document.getElementById('app').innerHTML=head+srcRow+mCard
+    document.getElementById('app').innerHTML=head+srcRow+feelBar+mCard
       +(cur==='manual' ? '' :
         '<div class="card empty"><div class="emptyTitle">No vitals yet</div>'
         +'<p class="emptyBody">Pick a source above — rate how you feel (Manual), connect Whoop, or pull from your Apple Watch. Your day then builds into a score and an energy curve.</p></div>');
+    bindFeel();
     return;
   }
 
-  // ticker
-  const tk='<div class="ticker"><div class="tkLive"><span class="d"></span>Live</div><div class="tkScroll">'
-    + tickerItems().map(it=>'<div class="tkItem">'+it[0]+' <b>'+esc(it[1])+'</b><span class="dot"></span></div>').join('')
-    + tickerItems().map(it=>'<div class="tkItem">'+it[0]+' <b>'+esc(it[1])+'</b><span class="dot"></span></div>').join('')
-    +'</div></div>';
+  // nasdaq-style scrolling ticker (items duplicated so the marquee loops seamlessly)
+  const tkItems = tickerItems().map(it=>'<div class="tkItem">'+it[0]+' <b>'+esc(it[1])+'</b><span class="dot"></span></div>').join('');
+  const tk='<div class="ticker"><div class="tkLive"><span class="d"></span>Live</div><div class="tkScroll"><div class="tkTrack">'+tkItems+tkItems+'</div></div></div>';
 
   // right now
-  const ov=overall(); const ot=toneOf(ov.score);
+  const ov=overall(); const ot=toneOf(ov.score); const sv=ov.score!=null?ov.score:0;
   const c1=2*Math.PI*90;
   const ovRing='<div class="bigRing" style="--ringc:'+ot.c+'"><div class="glow"></div>'
     +'<svg viewBox="0 0 200 200"><circle class="tr" cx="100" cy="100" r="90"/>'
-    +'<circle class="fl" cx="100" cy="100" r="90" style="stroke-dasharray:'+c1+';stroke-dashoffset:'+(c1*(1-ov.score/100))+'"/></svg>'
-    +'<div class="bigInner"><div class="bigNum">'+ov.score+'</div><div class="bigWord">'+ot.word+'</div><div class="bigCap">Today overall</div></div></div>';
+    +(ov.score!=null?'<circle class="fl" cx="100" cy="100" r="90" style="stroke-dasharray:'+c1+';stroke-dashoffset:'+(c1*(1-sv/100))+'"/>':'')
+    +'</svg>'
+    +'<div class="bigInner"><div class="bigNum">'+(ov.score!=null?ov.score:'—')+'</div><div class="bigWord">'+ot.word+'</div><div class="bigCap">Today overall</div></div></div>';
   const why='<div class="whyBox'+(whyOpen?' on':'')+'" id="whyBox">'+ov.labels.map(l=>'<div class="whyRow"><span>'+l[0]+'</span><b>'+Math.round(l[1])+'%</b></div>').join('')+'</div>';
   const scoreCard='<div class="card scoreCard">'+ovRing+'<button class="whyLink" id="whyLink">Why this score →</button>'+why+'</div>';
 
@@ -517,8 +636,31 @@ function render(){
     +'</div>';
   const daySec='<div class="sec"><span class="secNum">02</span><span class="secTitle">Your day</span><span class="secLine"></span></div>'+curveCard;
 
-  document.getElementById('app').innerHTML=head+srcRow+mCard+tk+nowSec+daySec;
-  bindScrub();
+  // caffeine — quick-log + crash coaching
+  const cafSec='<div class="sec"><span class="secNum">03</span><span class="secTitle">Caffeine</span><span class="secLine"></span></div>'+caffeineCardHtml();
+
+  document.getElementById('app').innerHTML=head+srcRow+feelBar+mCard+tk+nowSec+daySec+cafSec;
+  bindScrub(); bindFeel();
+}
+function feelBarHtml(){
+  const f=latestFeelToday(); const val=f!=null?f:Math.round(energyAt(nowT()).e);
+  const days=feelDays();
+  const note = days>=30 ? 'Tailored to your last 30 days ✓' : (days>0?'Currently building a more detailed analysis · '+days+'/30 days':'Set this daily and I’ll tailor your model over 30 days');
+  return '<div class="feelBar"><div class="feelHead"><div class="feelTitle">How do you feel right now?</div><div class="feelNote'+(days>=30?' ready':'')+'">'+note+'</div></div>'
+    +'<div class="feelSliderWrap"><input class="feelSlider" id="feelSlider" type="range" min="0" max="100" value="'+val+'"><span class="feelPct" id="feelPct">'+val+'%</span></div></div>';
+}
+function bindFeel(){ const s=document.getElementById('feelSlider'); if(!s)return; const pct=document.getElementById('feelPct');
+  s.addEventListener('input',()=>{ if(pct)pct.textContent=s.value+'%'; });
+  s.addEventListener('change',()=>{ addFeel(+s.value); render(); });
+}
+function caffeineCardHtml(){
+  const caf=Math.round(caffeineNowMg()); const tip=caffeineCoach();
+  const chips=CAF_QUICK.map(c=>'<button class="cafChip" data-caf="'+c[1]+'" data-cafname="'+esc(c[0])+'">'+esc(c[0])+' · '+c[1]+'mg</button>').join('');
+  return '<div class="card cafCard"><div class="cafTop">'
+    +'<div class="cafStat"><div class="cafStatV">'+caf+'<small style="font-size:13px;color:var(--muted)"> mg</small></div><div class="cafStatL">On board now</div></div>'
+    +'<div class="cafChips">'+chips+'</div></div>'
+    +'<div class="cafTip'+(tip.warn?' warn':'')+'"><span class="cafTipIcon">'+tip.icon+'</span><span class="cafTipTxt">'+tip.txt+'</span></div>'
+    +'<p class="derived" style="margin-top:12px">Tapping a drink also logs it to your <a href="stimulant.html" style="color:var(--accent2)">Stimulant tracker</a> — and the curve updates with its lift + crash.</p></div>';
 }
 
 /* ============================================================
@@ -621,6 +763,7 @@ function saveManual(){
 function captureRhr(){ const el=document.getElementById('m-rhr'); if(el&&draft){ const n=Number(el.value); draft.rhr=(el.value!==''&&isFinite(n))?n:null; } }
 document.addEventListener('click',e=>{
   if(e.target.closest('#mSave')){ saveManual(); return; }
+  const cf=e.target.closest('[data-caf]'); if(cf){ logCaffeine(+cf.dataset.caf, cf.dataset.cafname||'Caffeine'); return; }
   const rt=e.target.closest('[data-rate]'); if(rt){ captureRhr(); const f=rt.dataset.rate,v=+rt.dataset.val; draft[f]=(draft[f]===v?null:v); render(); return; }
   const wk=e.target.closest('[data-wake]'); if(wk){ captureRhr(); draft.wakeTime=(draft.wakeTime===wk.dataset.wake?null:wk.dataset.wake); render(); return; }
   const hr=e.target.closest('[data-hrs]'); if(hr){ captureRhr(); const v=+hr.dataset.hrs; draft.sleepHours=(draft.sleepHours===v?null:v); render(); return; }
@@ -641,7 +784,10 @@ setInterval(()=>{ if(health())render(); }, 60000);
   const cs=await PatronDB.get('peaklog');
   if(cs&&cs.days){ const local=loadLog(); const merged={days:Object.assign({},cs.days,local.days)}; try{localStorage.setItem(PLOG,JSON.stringify(merged));}catch(e){} }
   else { PatronDB.set('peaklog',loadLog()); }
-  await new Promise(r=>setTimeout(r,300)); render();
+  const fs=await PatronDB.get('peakfeel');
+  if(fs&&Array.isArray(fs.checks)){ const lf=loadFeel(); const seen={}; const all=fs.checks.concat(lf.checks); const merged=[]; all.forEach(c=>{ const key=c.t+'_'+c.pct; if(!seen[key]){seen[key]=1;merged.push(c);} }); merged.sort((a,b)=>a.t-b.t); _feelC=undefined; try{localStorage.setItem(FLOG,JSON.stringify({checks:merged}));}catch(e){} }
+  else { PatronDB.set('peakfeel',loadFeel()); }
+  clearCaches(); await new Promise(r=>setTimeout(r,300)); render();
 }catch(e){} })();
 </script>
 <script src="brand.js?v=16"></script>
