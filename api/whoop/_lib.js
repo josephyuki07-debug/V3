@@ -36,7 +36,9 @@ function clearCookie(name, secure) {
 }
 
 function creds() {
-  const id = process.env.WHOOP_CLIENT_ID, secret = process.env.WHOOP_CLIENT_SECRET;
+  // .trim() guards against stray spaces / newlines pasted into the Vercel env var,
+  // which otherwise produce a WHOOP "invalid_client" error.
+  const id = (process.env.WHOOP_CLIENT_ID || '').trim(), secret = (process.env.WHOOP_CLIENT_SECRET || '').trim();
   if (!id || !secret) { const e = new Error('WHOOP_NOT_CONFIGURED'); e.code = 'WHOOP_NOT_CONFIGURED'; throw e; }
   return { id, secret };
 }
