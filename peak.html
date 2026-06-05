@@ -163,6 +163,34 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
 .empty{ text-align:center; padding:50px 20px; }
 .emptyTitle{ font-family:var(--serif); font-style:italic; font-size:26px; }
 .emptyBody{ font-size:14px; color:var(--muted2); line-height:1.6; margin:12px auto 0; max-width:42ch; }
+
+/* day history cards */
+.dayRow{ display:flex; gap:9px; overflow-x:auto; padding:2px 2px 8px; margin:0 0 20px; scrollbar-width:none; }
+.dayRow::-webkit-scrollbar{ display:none; }
+.dayCard{ flex:0 0 auto; width:62px; cursor:pointer; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.02); padding:10px 0; text-align:center; transition:all .18s var(--ease); }
+.dayCard:hover{ border-color:var(--line2); }
+.dayCard.on{ border-color:var(--accent); background:rgba(52,211,153,.08); }
+.dayCard.today .dayWk{ color:var(--accent); }
+.dayWk{ font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+.dayNum{ font-family:var(--serif); font-size:20px; color:var(--fg); margin:3px 0 6px; line-height:1; }
+.dayScore{ width:30px; height:30px; margin:0 auto; border-radius:50%; display:grid; place-items:center; font-family:var(--mono); font-size:11px; font-weight:600; border:2px solid var(--dsc,rgba(255,255,255,.1)); color:var(--dsc,var(--muted)); }
+.dayScore.empty2{ border-style:dashed; }
+
+/* tap-rating rows */
+.rateRow{ display:flex; align-items:center; gap:12px; margin-bottom:11px; flex-wrap:wrap; }
+.rateLab{ font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted2); width:108px; flex-shrink:0; }
+.chips{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.chip{ appearance:none; cursor:pointer; min-width:40px; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:rgba(255,255,255,.02); color:var(--muted2); font-family:var(--mono); font-size:13px; transition:all .15s var(--ease); }
+.chip:hover{ border-color:var(--line2); color:var(--fg); }
+.chip.on{ background:linear-gradient(120deg,var(--accent),var(--accent2)); border-color:transparent; color:#04130c; font-weight:600; box-shadow:0 0 16px -6px var(--glow); }
+.chip.warnOn.on{ background:linear-gradient(120deg,#FBBF24,#fcd34d); }
+.chipWord{ font-family:var(--serif); font-style:italic; font-size:14px; color:var(--accent2); margin-left:4px; }
+.blockLab{ font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin:20px 0 12px; }
+.derived{ font-family:var(--mono); font-size:11px; letter-spacing:.04em; color:var(--muted); margin-top:10px; }
+.derived b{ color:var(--accent2); }
+.miniIn{ width:90px; background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:10px; padding:9px 11px; color:var(--fg); font-family:var(--ui); font-size:14px; }
+.miniIn:focus{ outline:none; border-color:var(--accent); }
+@media (max-width:520px){ .rateLab{ width:100%; } }
 @media (prefers-reduced-motion:reduce){ .gem,.bigRing .glow,.tkLive .d{ animation:none } }
 </style>
 </head>
@@ -402,6 +430,22 @@ function tickerItems(){
  * ============================================================ */
 let whyOpen=false;
 let selectedSrc=null; // which source pill is active (independent of saved data)
+
+/* ---- per-day manual log (history for the day cards) ---- */
+const PLOG='peak_log_v1';
+function loadLog(){ const r=readLS(PLOG); return (r&&r.days)?r:{days:{}}; }
+function saveLog(l){ try{ localStorage.setItem(PLOG,JSON.stringify(l)); }catch(e){} if(window.PatronDB&&PatronDB.isCloud())PatronDB.set('peaklog',l); }
+function dayKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+let selectedDate=dayKey();
+let draft=null;
+function blankDraft(){ return {sleepQ:null,energy:null,mood:null,soreness:null,stress:null,wakeTime:null,sleepHours:null,rhr:null}; }
+function loadDraft(dk){ const d=loadLog().days[dk]; draft = d?Object.assign(blankDraft(),d):blankDraft(); }
+// Carry over yesterday's schedule (wake/hours) so today pre-fills and you only change what differs.
+function prefillSchedule(){ if(draft.wakeTime!=null||draft.sleepHours!=null)return; const log=loadLog(); const keys=Object.keys(log.days).sort(); for(let i=keys.length-1;i>=0;i--){ const d=log.days[keys[i]]; if(d&&(d.wakeTime||d.sleepHours)){ if(draft.wakeTime==null)draft.wakeTime=d.wakeTime||null; if(draft.sleepHours==null)draft.sleepHours=d.sleepHours||null; break; } } }
+const WAKE_TIMES=['05:30','06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30'];
+const SLEEP_HRS=[5,5.5,6,6.5,7,7.5,8,8.5,9,9.5];
+function hmToFloat(s){ if(!s)return null; const [h,m]=String(s).split(':').map(Number); return h+(m||0)/60; }
+function deriveBed(wakeTime,hours){ if(!wakeTime||hours==null)return null; const [wh,wm]=wakeTime.split(':').map(Number); let mins=(wh*60+(wm||0))-Math.round(hours*60); mins=((mins%1440)+1440)%1440; return String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0'); }
 function render(){
   const h=health();
   const dateStr=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
@@ -504,48 +548,83 @@ function manualSel(id,label,opts,cur){
   return '<div class="f"><label class="fLab" for="'+id+'">'+label+'</label><select id="'+id+'" class="fIn"><option value="">—</option>'
     +opts.map((t,i)=>{ const v=i+1; return '<option value="'+v+'"'+(String(cur)===String(v)?' selected':'')+'>'+v+' · '+t+'</option>'; }).join('')+'</select></div>';
 }
-/* Inline "Daily check-in" card — the things you update each day live right on the page. */
-function manualCard(h){
-  const hh=(h&&h.source==='manual')?h:{};
-  const g=k=>(hh&&hh[k]!=null?hh[k]:'');
-  const saved=(h&&h.source==='manual'&&h.ts)?'<span class="srcLab" style="margin:0">Saved '+timeAgo(h.ts)+'</span>':'';
-  return '<div class="card manualCard"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><p class="todayEyebrow" style="margin:0">Daily check-in</p>'+saved+'</div>'
-    +'<h2 class="todayHead" style="font-size:22px;margin:10px 0 6px">How you feel today</h2>'
-    +'<p class="todaySub" style="margin-bottom:18px">Update what changed since yesterday — your <b style="color:var(--accent2)">sleep</b>, <b style="color:var(--accent2)">bed &amp; wake times</b>, and a quick morning rating. No band needed.</p>'
-    +'<div class="fGrid">'
-    +manualSel('m-sq','Sleep quality',['Terrible','Poor','OK','Good','Great'],g('sleepQ'))
-    +manualSel('m-en','Energy',['Drained','Low','OK','Good','Buzzing'],g('energy'))
-    +manualSel('m-mo','Mood',['Low','Meh','OK','Good','Great'],g('mood'))
-    +manualSel('m-so','Soreness',['None','Mild','Some','Sore','Wrecked'],g('soreness'))
-    +manualSel('m-st','Stress',['Calm','Low','OK','High','Frazzled'],g('stress'))
-    +'<div class="f"><label class="fLab" for="m-sleep">Sleep (hours)</label><input id="m-sleep" class="fIn" type="number" min="0" max="24" step="0.1" placeholder="7.5" value="'+esc(g('sleepHours'))+'"></div>'
-    +'<div class="f"><label class="fLab" for="m-bed">Bedtime</label><input id="m-bed" class="fIn" type="time" value="'+esc(g('bedtime'))+'"></div>'
-    +'<div class="f"><label class="fLab" for="m-wake">Wake time</label><input id="m-wake" class="fIn" type="time" value="'+esc(g('wakeTime'))+'"></div>'
-    +'<div class="f"><label class="fLab" for="m-rhr">Resting pulse</label><input id="m-rhr" class="fIn" type="number" min="20" max="150" placeholder="optional" value="'+esc(g('rhr'))+'"></div>'
-    +'</div>'
-    +'<button class="primary" id="mSave">Save today’s readiness</button></div>';
+/* Inline "Daily check-in" card — tap-only. Day cards (history) + 1-tap ratings
+ * + a wake-time / hours-slept chip system that derives bedtime automatically. */
+const RATINGS=[
+  ['sleepQ','Sleep quality',['Terrible','Poor','OK','Good','Great'],false],
+  ['energy','Energy',['Drained','Low','OK','Good','Buzzing'],false],
+  ['mood','Mood',['Low','Meh','OK','Good','Great'],false],
+  ['soreness','Soreness',['None','Mild','Some','Sore','Wrecked'],true],
+  ['stress','Stress',['Calm','Low','OK','High','Frazzled'],true],
+];
+function dayCardsHtml(){
+  const log=loadLog(); const out=[]; const today=dayKey();
+  for(let i=6;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); const k=dayKey(d);
+    const wk=d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase();
+    const rec=log.days[k]&&log.days[k].readiness; const tn=toneOf(rec);
+    const scoreHtml=rec!=null?'<div class="dayScore" style="--dsc:'+tn.c+'">'+Math.round(rec)+'</div>':'<div class="dayScore empty2">·</div>';
+    out.push('<button class="dayCard'+(k===selectedDate?' on':'')+(k===today?' today':'')+'" data-day="'+k+'"><div class="dayWk">'+(k===today?'TODAY':wk)+'</div><div class="dayNum">'+d.getDate()+'</div>'+scoreHtml+'</button>');
+  }
+  return '<div class="dayRow">'+out.join('')+'</div>';
 }
-function timeAgo(ts){ const m=Math.max(0,Math.round((Date.now()-ts)/60000)); if(m<1)return 'just now'; if(m<60)return m+'m ago'; const hh=Math.round(m/60); if(hh<24)return hh+'h ago'; return Math.round(hh/24)+'d ago'; }
+function rateRow(field,label,opts,warn){
+  const cur=draft[field];
+  const chips=opts.map((t,i)=>{ const v=i+1; return '<button class="chip'+(warn?' warnOn':'')+(cur===v?' on':'')+'" data-rate="'+field+'" data-val="'+v+'">'+v+'</button>'; }).join('');
+  const word=cur?'<span class="chipWord">'+opts[cur-1]+'</span>':'';
+  return '<div class="rateRow"><span class="rateLab">'+label+'</span><div class="chips">'+chips+word+'</div></div>';
+}
+function manualCard(h){
+  if(draft==null){ loadDraft(selectedDate); prefillSchedule(); }
+  const dObj=new Date(selectedDate+'T12:00:00');
+  const isToday=selectedDate===dayKey();
+  const dateLabel=dObj.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const ratings=RATINGS.map(r=>rateRow(r[0],r[1],r[2],r[3])).join('');
+  // sleep chips
+  const wakeChips=WAKE_TIMES.map(t=>'<button class="chip'+(draft.wakeTime===t?' on':'')+'" data-wake="'+t+'">'+clockOf(hmToFloat(t))+'</button>').join('');
+  const hrChips=SLEEP_HRS.map(v=>'<button class="chip'+(draft.sleepHours===v?' on':'')+'" data-hrs="'+v+'">'+v+'</button>').join('');
+  const bed=deriveBed(draft.wakeTime,draft.sleepHours);
+  const derived=(draft.wakeTime&&draft.sleepHours!=null)
+    ? '<div class="derived">→ In bed around <b>'+clockOf(hmToFloat(bed))+'</b> · <b>'+draft.sleepHours+'h</b> sleep</div>'
+    : '<div class="derived">Pick a wake time + hours and we work out your bedtime.</div>';
+  return '<div class="card manualCard">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><p class="todayEyebrow" style="margin:0">Daily check-in</p><span class="srcLab" style="margin:0">'+esc(dateLabel)+'</span></div>'
+    + dayCardsHtml()
+    +'<p class="blockLab">How you feel '+(isToday?'today':'')+'</p>'
+    + ratings
+    +'<p class="blockLab">Sleep</p>'
+    +'<div class="rateRow"><span class="rateLab">Woke at</span><div class="chips">'+wakeChips+'</div></div>'
+    +'<div class="rateRow"><span class="rateLab">Hours slept</span><div class="chips">'+hrChips+'</div></div>'
+    + derived
+    +'<div class="rateRow" style="margin-top:18px"><span class="rateLab">Resting pulse</span><div class="chips"><input id="m-rhr" class="miniIn" type="number" min="20" max="150" placeholder="optional" value="'+(draft.rhr!=null?draft.rhr:'')+'"><span class="chipWord" style="color:var(--muted);font-style:normal;font-family:var(--mono);font-size:10px">optional · count 30s ×2</span></div></div>'
+    +'<button class="primary" id="mSave">'+(isToday?'Save today’s readiness':'Save '+dObj.toLocaleDateString('en-US',{month:'short',day:'numeric'}))+'</button></div>';
+}
 function saveManual(){
-  const num=id=>{ const el=document.getElementById(id); if(!el||el.value==='')return null; const n=Number(el.value); return isFinite(n)?n:null; };
-  const str=id=>{ const el=document.getElementById(id); return el&&el.value?el.value:null; };
-  const rate=id=>{ const n=num(id); return (n!=null&&n>=1&&n<=5)?n:null; };
-  const sleepQ=rate('m-sq'),energy=rate('m-en'),mood=rate('m-mo'),soreness=rate('m-so'),stress=rate('m-st');
-  const bedtime=str('m-bed'),wakeTime=str('m-wake');
-  let sleepHours=num('m-sleep');
-  if(sleepHours==null&&bedtime&&wakeTime){ const [bh,bm]=bedtime.split(':').map(Number),[wh,wm]=wakeTime.split(':').map(Number); let mins=(wh*60+wm)-(bh*60+bm); if(mins<=0)mins+=1440; sleepHours=Math.round(mins/60*10)/10; }
-  const rhr=num('m-rhr');
-  const target=8;
+  // pull resting pulse (the one free-typed field) into the draft
+  const rEl=document.getElementById('m-rhr'); if(rEl){ const n=Number(rEl.value); draft.rhr=(rEl.value!==''&&isFinite(n))?n:null; }
+  const {sleepQ,energy,mood,soreness,stress,wakeTime,sleepHours,rhr}=draft;
   const readiness=subjReadiness({sleepQ,energy,mood,soreness,stress});
-  if(readiness==null&&sleepHours==null&&rhr==null){ alert('Rate at least how you feel — or enter sleep / bed + wake times.'); return; }
+  if(readiness==null&&sleepHours==null&&rhr==null){ alert('Tap at least how you feel — or pick your sleep.'); return; }
+  const target=8;
   const sleepPerf=sleepHours!=null?Math.round(Math.min(100,sleepHours/target*100)):null;
-  saveHealth({source:'manual',connected:true,ts:Date.now(),recovery:readiness,subjective:readiness!=null,sleepQ,energy,mood,soreness,stress,sleepHours,sleepPerf,sleepTargetHours:target,bedtime,wakeTime,hrv:null,rhr,strain:null});
+  const bedtime=deriveBed(wakeTime,sleepHours);
+  const entry={sleepQ,energy,mood,soreness,stress,wakeTime,sleepHours,bedtime,rhr,readiness,sleepPerf,ts:Date.now()};
+  // 1) write to the per-day history log
+  const log=loadLog(); log.days[selectedDate]=entry; saveLog(log);
+  // 2) if it's today, also publish to the suite-wide vitals so scores/curve + other apps update
+  if(selectedDate===dayKey()){
+    saveHealth({source:'manual',connected:true,ts:Date.now(),recovery:readiness,subjective:readiness!=null,sleepQ,energy,mood,soreness,stress,sleepHours,sleepPerf,sleepTargetHours:target,bedtime,wakeTime,hrv:null,rhr,strain:null});
+  }
   selectedSrc='manual'; render();
 }
 
 /* events */
+function captureRhr(){ const el=document.getElementById('m-rhr'); if(el&&draft){ const n=Number(el.value); draft.rhr=(el.value!==''&&isFinite(n))?n:null; } }
 document.addEventListener('click',e=>{
   if(e.target.closest('#mSave')){ saveManual(); return; }
+  const rt=e.target.closest('[data-rate]'); if(rt){ captureRhr(); const f=rt.dataset.rate,v=+rt.dataset.val; draft[f]=(draft[f]===v?null:v); render(); return; }
+  const wk=e.target.closest('[data-wake]'); if(wk){ captureRhr(); draft.wakeTime=(draft.wakeTime===wk.dataset.wake?null:wk.dataset.wake); render(); return; }
+  const hr=e.target.closest('[data-hrs]'); if(hr){ captureRhr(); const v=+hr.dataset.hrs; draft.sleepHours=(draft.sleepHours===v?null:v); render(); return; }
+  const dy=e.target.closest('[data-day]'); if(dy){ selectedDate=dy.dataset.day; loadDraft(selectedDate); if(selectedDate===dayKey())prefillSchedule(); render(); return; }
   const s=e.target.closest('[data-src]'); if(s){ pickSource(s.dataset.src); return; }
   const c=e.target.closest('[data-chart]'); if(c){ chartType=c.dataset.chart; render(); return; }
   if(e.target.closest('#whyLink')){ whyOpen=!whyOpen; const b=document.getElementById('whyBox'); if(b)b.classList.toggle('on',whyOpen); return; }
@@ -557,8 +636,13 @@ document.addEventListener('click',e=>{
 render();
 setInterval(()=>{ if(health())render(); }, 60000);
 
-/* cloud hydrate — refresh once the device snapshot lands */
-(async function(){ if(!window.PatronDB||!PatronDB.isCloud())return; try{ await new Promise(r=>setTimeout(r,400)); render(); }catch(e){} })();
+/* cloud hydrate — pull the day-log + refresh once the device snapshot lands */
+(async function(){ if(!window.PatronDB||!PatronDB.isCloud())return; try{
+  const cs=await PatronDB.get('peaklog');
+  if(cs&&cs.days){ const local=loadLog(); const merged={days:Object.assign({},cs.days,local.days)}; try{localStorage.setItem(PLOG,JSON.stringify(merged));}catch(e){} }
+  else { PatronDB.set('peaklog',loadLog()); }
+  await new Promise(r=>setTimeout(r,300)); render();
+}catch(e){} })();
 </script>
 <script src="brand.js?v=16"></script>
 </body>
