@@ -286,6 +286,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-ui), -ap
  * Apps in the suite — one bento card each.
  * ============================================================ */
 const APPS = [
+  { file: 'peak.html',        name: 'Peak',        tag: 'Daily readiness · energy curve',        icon: '🔆', wide: true },
   { file: 'finance.html',     name: 'Finance',     tag: 'Net worth · subs · orders · wishlist', icon: '💰', wide: true },
   { file: 'gym.html',         name: 'Gym',         tag: 'Progressive overload coach',           icon: '🏋️', wide: true },
   { file: 'supplements.html', name: 'Supplements', tag: 'Your stack + smart recommendations',   icon: '💊' },
@@ -527,6 +528,7 @@ function statFor(file){
     else if (file === 'stimulant.html') { const s = lsGet('stimulant_standalone_v1'); if (s && Array.isArray(s.logs)) { const k = localDateKey(); const mg = s.logs.filter(l => l && localDateKey(new Date(l.t)) === k).reduce((a,l)=>a+(Number(l.mg)||0),0); if (mg>0) return { value: mg + ' mg', label: 'caffeine today' }; } }
     else if (file === 'whoop.html') { const rec = estRecovery(health); if (rec != null) return { value: Math.round(rec) + '%', label: isEstRecovery(health) ? 'recovery · est' : 'recovery' }; }
     else if (file === 'recovery.html') { const rec = estRecovery(health); if (rec != null) return { value: Math.round(rec) + '%', label: 'recovery' }; }
+    else if (file === 'peak.html') { const rec = estRecovery(health); if (rec != null) return { value: Math.round(rec) + '%', label: 'readiness' }; }
   } catch (e) {}
   return null;
 }
@@ -542,6 +544,7 @@ const ART = {
   'progress.html':'linear-gradient(135deg,#34D399,#8B5CF6)',
   'recovery.html':'linear-gradient(135deg,#22D3EE,#34D399)',
   'macros.html':'linear-gradient(135deg,#F59E0B,#EF4444)',
+  'peak.html':'linear-gradient(135deg,#34D399,#22D3EE)',
 };
 function artFor(file){ return ART[file] || 'linear-gradient(135deg,#8B5CF6,#22D3EE)'; }
 /* Animated neon icons live in icons.js (window.DASH_ICONS), keyed by page. */
