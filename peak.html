@@ -411,10 +411,24 @@ function toneOf(v){ if(v==null)return {c:'var(--muted)',word:'—'}; if(v>=80)re
  * Two circadian peaks (morning ~3h after wake, evening ~3h before bed),
  * amplitude scaled by recovery, plus a caffeine boost from the PK model. */
 function recScale(){ const rec=estRecovery(health()); const r=rec==null?70:rec; return 0.58+0.42*(r/100); }
+/* Physiologically-grounded circadian arousal (0..~0.9):
+ * sleep inertia after waking → broad daytime plateau → a SHALLOW post-lunch dip
+ * (~45% through your waking day) → an evening second-wind → wind-down before bed →
+ * a proper low through the night (lowest mid-sleep). The afternoon dip is gentle,
+ * never below your nighttime level. */
 function shape(t,wake,bed){
-  const m=Math.exp(-Math.pow(t-(wake+3),2)/(2*2.4*2.4));
-  const e=1.04*Math.exp(-Math.pow(t-(bed-3),2)/(2*2.7*2.7));
-  return Math.max(m,e);
+  const L=(((bed-wake)%24)+24)%24 || 16;        // hours awake
+  let aw=(((t-wake)%24)+24)%24;                  // hours since waking
+  if(aw>L){                                      // asleep
+    const into=aw-L, sleepLen=24-L||8, mid=sleepLen/2;
+    return 0.12 - 0.07*(1-Math.abs(into-mid)/mid); // 0.05 mid-sleep → 0.12 near edges
+  }
+  const inertia=0.55+0.45*(1-Math.exp(-aw/1.0));        // groggy → alert over ~3h
+  const decline=1-0.16*(aw/L);                          // homeostatic sleep pressure
+  const winddown=1-0.40*clamp((aw-(L-1.5))/1.5,0,1);    // taper in the last 1.5h
+  const dip=0.13*Math.exp(-Math.pow(aw-L*0.45,2)/(2*1.7*1.7));  // post-lunch dip (shallow)
+  const eve=0.07*Math.exp(-Math.pow(aw-(L-4),2)/(2*2.0*2.0));   // evening second wind
+  return Math.max(0.04, 0.92*inertia*decline*winddown - dip + eve);
 }
 /* Caffeine net effect: a boost while it's in your system, then a rebound DIP
  * below baseline as it clears (adenosine rebound = the crash). */
@@ -426,10 +440,10 @@ function caffNet(t){
   return boost-rebound;
 }
 // raw prediction (no personal calibration) — used to measure the feel-gap
-function energyRaw(t){ const {wake,bed}=wakeBed(); const rs=recScale(); const base=clamp((0.06+shape(t,wake,bed)*0.94)*rs*100,2,100); return clamp(base+caffNet(t),1,100); }
+function energyRaw(t){ const {wake,bed}=wakeBed(); const rs=recScale(); const base=clamp(shape(t,wake,bed)*100*rs,1,100); return clamp(base+caffNet(t),1,100); }
 function energyAt(t){
   const {wake,bed}=wakeBed(); const rs=recScale();
-  const base=clamp((0.06+shape(t,wake,bed)*0.94)*rs*100+personalAdj(),1,100);
+  const base=clamp(shape(t,wake,bed)*100*rs+personalAdj(),1,100);
   const caf=caffNet(t);
   return { base, caf, e:clamp(base+caf,1,100) };
 }
