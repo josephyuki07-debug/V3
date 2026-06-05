@@ -294,8 +294,8 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
  * ============================================================ */
 function readLS(k){ try{ const r=localStorage.getItem(k); return r?JSON.parse(r):null; }catch(e){ return null; } }
 // per-render caches (the energy curve reads these hundreds of times) — cleared at the top of render()
-let _hl,_prof,_stim,_feelC;
-function clearCaches(){ _hl=undefined; _prof=undefined; _stim=undefined; _feelC=undefined; }
+let _hl,_prof,_stim,_feelC,_med;
+function clearCaches(){ _hl=undefined; _prof=undefined; _stim=undefined; _feelC=undefined; _med=undefined; }
 function health(){ if(_hl!==undefined)return _hl; const d=readLS('patron_health_v1'); _hl=(d&&d.connected)?d:null; return _hl; }
 function profile(){ if(_prof!==undefined)return _prof; _prof=readLS('patron_profile_v1'); return _prof; }
 function clamp(x,a,b){ return Math.max(a,Math.min(b,x)); }
@@ -355,6 +355,83 @@ function macrosScore(){ const m=macrosToday(); if(!m)return null; return Math.ro
 /* ---- gym (optional input) ---- */
 function gymLoggedToday(){ const d=readLS('po_coach_workout_done'); return !!(d&&d[dKey()]); }
 
+/* ---- supplements (auto-read from the Supplements tracker; optional input) ---- */
+function suppsToday(){ const s=readLS('supplements_standalone_v1'); if(!s||!Array.isArray(s.items)||!s.items.length) return null; const tk=(s.taken&&s.taken[dKey()])||{}; const taken=s.items.filter(i=>tk[i.id]).length; return {taken,total:s.items.length}; }
+function suppsScore(){ const su=suppsToday(); if(!su||su.taken===0) return null; return Math.round(su.taken/su.total*100); }
+
+/* ============================================================
+ * Meds & substances — search any prescription / nicotine / nootropic.
+ * Each has an onset→peak→wear-off profile; logging a dose shapes the energy
+ * curve (with a comedown). Informational only — never a dosing suggestion.
+ * ============================================================ */
+const SUB_DB=[
+  // ADHD / stimulants
+  {name:'Concerta',mg:36,ref:36,tPeak:7,dur:12,lift:30,cat:'rx'},
+  {name:'Ritalin IR',mg:10,ref:10,tPeak:1.5,dur:4,lift:24,cat:'rx'},
+  {name:'Ritalin LA',mg:20,ref:20,tPeak:5,dur:8,lift:28,cat:'rx'},
+  {name:'Focalin',mg:10,ref:10,tPeak:1.5,dur:5,lift:25,cat:'rx'},
+  {name:'Focalin XR',mg:20,ref:20,tPeak:5,dur:10,lift:28,cat:'rx'},
+  {name:'Adderall IR',mg:10,ref:10,tPeak:2,dur:5,lift:26,cat:'rx'},
+  {name:'Adderall XR',mg:20,ref:20,tPeak:5,dur:10,lift:30,cat:'rx'},
+  {name:'Vyvanse',mg:40,ref:40,tPeak:5,dur:12,lift:30,cat:'rx'},
+  {name:'Modafinil',mg:200,ref:200,tPeak:3,dur:12,lift:24,cat:'rx'},
+  {name:'Armodafinil',mg:150,ref:150,tPeak:4,dur:14,lift:24,cat:'rx'},
+  {name:'Strattera',mg:40,ref:40,tPeak:3,dur:10,lift:9,cat:'rx'},
+  // Nicotine
+  {name:'Zyn (3mg)',mg:3,ref:3,tPeak:0.4,dur:1.2,lift:9,cat:'nic'},
+  {name:'Zyn (6mg)',mg:6,ref:6,tPeak:0.4,dur:1.4,lift:13,cat:'nic'},
+  {name:'Velo (4mg)',mg:4,ref:4,tPeak:0.4,dur:1.3,lift:11,cat:'nic'},
+  {name:'Nicotine pouch',mg:4,ref:4,tPeak:0.45,dur:1.3,lift:11,cat:'nic'},
+  {name:'Vape',mg:1,ref:1,tPeak:0.15,dur:0.8,lift:8,cat:'nic'},
+  {name:'Cigarette',mg:1,ref:1,tPeak:0.15,dur:0.9,lift:8,cat:'nic'},
+  // Nootropics
+  {name:'L-Tyrosine',mg:500,ref:500,tPeak:1.5,dur:4,lift:8,cat:'noot'},
+  {name:'L-Theanine',mg:200,ref:200,tPeak:1,dur:4,lift:5,cat:'noot'},
+  {name:'Rhodiola',mg:200,ref:200,tPeak:1.5,dur:5,lift:7,cat:'noot'},
+];
+const MEDLOG='peak_meds_v1'; let medQuery='';
+function medStore(){ const r=readLS(MEDLOG); return {logs:(r&&Array.isArray(r.logs))?r.logs:[], custom:(r&&Array.isArray(r.custom))?r.custom:[]}; }
+function medLogs(){ if(_med!==undefined)return _med; _med=medStore().logs; return _med; }
+function saveMed(s){ try{ localStorage.setItem(MEDLOG,JSON.stringify(s)); }catch(e){} if(window.PatronDB&&PatronDB.isCloud())PatronDB.set('peakmeds',s); render(); }
+function medCustoms(){ return medStore().custom; }
+function allSubs(){ return medCustoms().concat(SUB_DB); }
+// smooth onset→peak→exponential-decay; peaks exactly at tPeak, ~11% left by `dur`
+function subNorm(tau,tPeak,dur){ if(tau<0)return 0; tPeak=tPeak||1; dur=dur||4; if(tau<=tPeak)return 0.5-0.5*Math.cos(Math.PI*tau/tPeak); const decay=Math.max(0.3,(dur-tPeak)/2.2); return Math.exp(-(tau-tPeak)/decay); }
+function medEffectOf(l,tMs){ const tau=(tMs-l.t)/3600000; const dose=Math.min(2.2,(l.mg||l.ref||1)/(l.ref||l.mg||1)); return (l.lift||15)*dose*subNorm(tau,l.tPeak,l.dur); }
+function medBoost(t){ const ms=tToMs(t); return medLogs().reduce((s,l)=>s+medEffectOf(l,ms),0); }
+function medNet(t){ const cur=medBoost(t); let mx=cur; for(let dt=0.5;dt<=6;dt+=0.5){ const b=medBoost(t-dt); if(b>mx)mx=b; } const rebound=Math.min(16,Math.max(0,mx-cur)*0.16); return cur-rebound; }
+function medBoardNow(){ return medBoost(nowT()); }
+function logMed(sub){ const s=medStore(); s.logs.push({id:'m_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:sub.name,mg:sub.mg,t:Date.now(),tPeak:sub.tPeak,dur:sub.dur,lift:sub.lift,ref:sub.ref||sub.mg,cat:sub.cat||'rx'}); medQuery=''; saveMed(s); }
+function logMedByName(name){ let sub=allSubs().find(s=>s.name===name); if(!sub){ const ls=medLogs().filter(l=>l.name===name); sub=ls[ls.length-1]; } if(sub)logMed(sub); }
+function removeMedLog(id){ const s=medStore(); s.logs=s.logs.filter(l=>String(l.id)!==String(id)); saveMed(s); }
+function clearMedToday(){ const k=dKey(); const s=medStore(); s.logs=s.logs.filter(l=>dayKey(new Date(l.t))!==k); saveMed(s); }
+function addCustomMed(name,mg){ name=String(name).trim()||'Custom'; mg=Math.max(0,Math.round(+mg||0)); const sub={name:name,mg:mg,tPeak:2,dur:5,lift:Math.min(30,12+mg*0.05),ref:mg||1,cat:'custom'}; const s=medStore(); if(!s.custom.some(c=>String(c.name).toLowerCase()===name.toLowerCase()))s.custom.push(sub); s.logs.push({id:'m_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:name,mg:mg,t:Date.now(),tPeak:sub.tPeak,dur:sub.dur,lift:sub.lift,ref:sub.ref,cat:'custom'}); medQuery=''; saveMed(s); }
+function medTodayLogs(){ const k=dKey(); return medLogs().filter(l=>dayKey(new Date(l.t))===k).sort((a,b)=>b.t-a.t); }
+function medMostUsed(n){ const freq={},last={}; medLogs().forEach(l=>{ freq[l.name]=(freq[l.name]||0)+1; last[l.name]=l; }); return Object.keys(freq).sort((a,b)=>freq[b]-freq[a]).slice(0,n).map(nm=>last[nm]); }
+function medQuickList(){ const out=[],seen={}; const add=d=>{ const k=String(d.name).toLowerCase(); if(!seen[k]){ seen[k]=1; out.push(d); } }; medCustoms().forEach(add); medMostUsed(5).forEach(add); if(out.length<5)SUB_DB.slice(0,6).forEach(add); return out.slice(0,8); }
+function medResultsHtml(q){ q=(q||'').trim().toLowerCase(); if(!q)return ''; const m=allSubs().filter(d=>String(d.name).toLowerCase().includes(q)).slice(0,8); if(!m.length)return '<div class="cafNoMatch">No match — add it as a custom below ↓</div>'; return m.map(d=>'<div class="cafResult" data-medname="'+esc(d.name)+'"><span class="cafResultName">'+esc(d.name)+'</span><span class="cafResultMg">'+d.mg+'mg <em>+'+Math.round(d.lift)+'</em></span></div>').join(''); }
+function medCoach(){ const logs=medTodayLogs(); if(!logs.length) return {icon:'💊',txt:'Log a med or pouch (Concerta, Zyn, anything) and it shapes your focus curve — onset, peak &amp; wear-off.'};
+  const l=logs[0]; const pk=new Date(l.t+(l.tPeak||1)*3600000), off=new Date(l.t+(l.dur||4)*3600000);
+  const pkC=clockOf(pk.getHours()+pk.getMinutes()/60), offC=clockOf(off.getHours()+off.getMinutes()/60);
+  return {icon:'💊',txt:'<b>'+esc(l.name)+'</b> peaks ~<b>'+pkC+'</b>, fades ~<b>'+offC+'</b>. Stack your deep work before the fade. <span style="color:var(--muted)">(Informational, not dosing advice.)</span>'}; }
+function bindMed(){ const s=document.getElementById('medSearch'); if(!s)return; s.addEventListener('input',()=>{ medQuery=s.value; const r=document.getElementById('medResults'); if(r)r.innerHTML=medResultsHtml(medQuery); }); }
+function medCardHtml(){
+  const board=Math.round(medBoardNow()); const tip=medCoach();
+  const chips=medQuickList().map(d=>'<button class="cafChip" data-medname="'+esc(d.name)+'"><span class="cafChipName">'+esc(d.name)+'</span><span class="cafChipMg">'+d.mg+'mg <em>+'+Math.round(d.lift)+'</em></span></button>').join('');
+  const searchIcon='<span class="cafSearchIcon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>';
+  return '<div class="card cafCard">'
+    +'<div class="cafHero"><div class="cafHeroV">'+(board>0?'+'+board:'0')+'<small> focus on board</small></div><div class="cafCeil">prescription · nicotine · nootropics</div></div>'
+    +'<p class="cafQL">Quick log <span>· +N = peak effect</span></p>'
+    +'<div class="cafSearchWrap">'+searchIcon+'<input class="cafSearchIn" id="medSearch" type="text" placeholder="Search any med, pouch, nootropic…" value="'+esc(medQuery)+'" autocomplete="off"></div>'
+    +'<div class="cafResults" id="medResults">'+medResultsHtml(medQuery)+'</div>'
+    +'<div class="cafChips">'+chips+'</div>'
+    +'<div class="cafAddRow"><input class="cafAddName" id="medCustName" placeholder="Add a custom med/substance…"><input class="cafAddMg" id="medCustMg" type="number" inputmode="numeric" placeholder="mg"><button class="cafAddBtn" data-addmed="1">Add</button></div>'
+    + medLogsHtml()
+    +'<div class="cafTip"><span class="cafTipIcon">'+tip.icon+'</span><span class="cafTipTxt">'+tip.txt+'</span></div>'
+    +'</div>';
+}
+function medLogsHtml(){ const logs=medTodayLogs(); if(!logs.length)return ''; return '<div class="cafLogsHead"><span class="cafLogsLab">Today’s doses</span><button class="cafClear" data-clearmed="1">clear all</button></div><div class="cafLogs">'+logs.map(l=>'<span class="cafLog"><b>'+esc(l.name)+'</b> '+Math.round(l.mg)+'mg · '+fmtClockMs(l.t)+'<span class="cafLogX" data-rmmed="'+esc(l.id||'')+'" title="Remove">×</span></span>').join('')+'</div>'; }
+
 /* ---- profile stats for the header ticker ---- */
 function profileStats(){ const p=profile()||{}; const out=[]; const imperial=p.units==='imperial';
   if(typeof p.heightCm==='number') out.push(['Height', imperial?Math.round(p.heightCm/2.54)+'in':Math.round(p.heightCm)+'cm']);
@@ -383,6 +460,7 @@ function overall(){
   const sp=sleepPerfOf(h);    if(sp!=null){ parts.push(sp); w.push(0.30); labels.push(['Sleep',sp,true]); }
   if(waterLoggedToday()){ const hyd=Math.round(clamp01(drinksToday()/waterTarget())*100); parts.push(hyd); w.push(0.10); labels.push(['Hydration',hyd,false]); }
   const ms=macrosScore(); if(ms!=null){ parts.push(ms); w.push(0.10); labels.push(['Protein',ms,false]); }
+  const ss=suppsScore(); if(ss!=null){ parts.push(ss); w.push(0.07); labels.push(['Supplements',ss,false]); }
   if(gymLoggedToday()){ parts.push(100); w.push(0.05); labels.push(['Trained',100,false]); }
   if(!parts.length) return { score:null, objective:null, feel:null, adj:0, feelW:0, labels:[] };
   const sw=w.reduce((a,b)=>a+b,0); let s=0; for(let i=0;i<parts.length;i++)s+=parts[i]*w[i];
@@ -448,12 +526,12 @@ function caffNet(t){
   return boost-rebound;
 }
 // raw prediction (no personal calibration) — used to measure the feel-gap
-function energyRaw(t){ const {wake,bed}=wakeBed(); const rs=recScale(); const base=clamp(shape(t,wake,bed)*100*rs,1,100); return clamp(base+caffNet(t),1,100); }
+function energyRaw(t){ const {wake,bed}=wakeBed(); const rs=recScale(); const base=clamp(shape(t,wake,bed)*100*rs,1,100); return clamp(base+caffNet(t)+medNet(t),1,100); }
 function energyAt(t){
   const {wake,bed}=wakeBed(); const rs=recScale();
   const base=clamp(shape(t,wake,bed)*100*rs+personalAdj(),1,100);
-  const caf=caffNet(t);
-  return { base, caf, e:clamp(base+caf,1,100) };
+  const sub=caffNet(t)+medNet(t);   // caffeine + meds/substances, with their comedowns
+  return { base, caf:sub, e:clamp(base+sub,1,100) };
 }
 function buildCurve(){ const a=[]; for(let t=0;t<=24;t+=0.5){ const v=energyAt(t); a.push({t,base:v.base,caf:v.caf,e:v.e}); } return a; }
 function peakOf(curve){ const {wake,bed}=wakeBed(); let best=curve[0]; for(const p of curve){ const inDay=bed>wake?(p.t>=wake&&p.t<=bed):(p.t>=wake||p.t<=bed); if(inDay&&p.e>best.e)best=p; } if(best.e<=2){ for(const p of curve)if(p.e>best.e)best=p; } return best; }
@@ -559,6 +637,7 @@ function recommendations(){
     else out.push([false,'Hydration on target.','Nicely topped up — that protects your focus curve.']);
   }
   const ms=macrosScore(); if(ms!=null){ const m=macrosToday(); out.push([ms<60,'Protein '+m.p+'g / '+proteinTarget()+'g.', ms<60?'Behind on protein — it’s the lever for recovery + muscle.':'Solid protein intake today.']); }
+  const su=suppsToday(); if(su) out.push([su.taken<su.total,'Supplements '+su.taken+'/'+su.total+'.', su.taken>=su.total?'Full stack in — that compounds into recovery over weeks.':'A few left — consistency is where supplements actually pay off.']);
   if(gymLoggedToday()) out.push([false,'Trained today. ✔','Session logged — recovery tonight is what banks the gains.']);
   if(!out.length) out.push([false,'Add your vitals.','Pick a source above and your day fills in.']);
   return out;
@@ -658,8 +737,10 @@ function tickerItems(){
   // optional logs (only if used today)
   if(waterLoggedToday()) items.push(['Water', drinksToday()+'/'+waterTarget()]);
   const m=macrosToday(); if(m) items.push(['Protein', m.p+'g']);
+  const su=suppsToday(); if(su&&su.taken>0) items.push(['Supps', su.taken+'/'+su.total]);
   if(gymLoggedToday()) items.push(['Gym','✔ done']);
   if(caffeineNowMg()>0) items.push(['Caffeine', Math.round(caffeineNowMg())+'mg']);
+  if(medBoardNow()>2) items.push(['Meds','+'+Math.round(medBoardNow())]);
   return items;
 }
 function srcName(s){ return s==='apple'?'Apple Watch':s==='whoop'?'Whoop':s==='fitbit'?'Fitbit':'Manual'; }
@@ -674,8 +755,8 @@ function infoCardHtml(){
   const days=feelDays();
   return '<div class="infoCard"><span class="infoTag">Estimate · learns over 30 days</span>'
     +'<p>Peak is a <b>science-based estimate from your own data</b> — not a medical measurement.</p>'
-    +'<h4>Real inputs</h4><p>Your Whoop / Apple Watch / manual vitals, the caffeine you log, water, protein, gym, and your weight/age/sex.</p>'
-    +'<h4>The model</h4><p>Energy curve = circadian rhythm (two-process sleep model) × your recovery, plus caffeine pharmacokinetics (absorption + your half-life) including the comedown. Recovery from HRV + resting HR + sleep; manual readiness uses the Hooper self-report index.</p>'
+    +'<h4>Real inputs</h4><p>Your Whoop / Apple Watch / manual vitals, the caffeine + meds/substances you log, supplements (auto-read from that tracker), water, protein, gym, and your weight/age/sex.</p>'
+    +'<h4>The model</h4><p>Energy curve = circadian rhythm (two-process sleep model) × your recovery, plus pharmacokinetics for caffeine <b>and any med/substance you log</b> (each with its own onset→peak→wear-off + comedown). Recovery from HRV + resting HR + sleep; manual readiness uses the Hooper self-report index. Meds are modeled for information only.</p>'
     +'<h4>Learns you</h4><p>Your “how I feel” checks correct the model toward how you actually feel — gradually, reaching full strength after ~30 days. <b>'+days+'/30 days</b> in so far.</p></div>';
 }
 
@@ -779,9 +860,12 @@ function render(){
   // caffeine — quick-log + crash coaching
   const cafSec='<div class="sec"><span class="secNum">03</span><span class="secTitle">Caffeine</span><span class="secLine"></span></div>'+caffeineCardHtml();
 
-  const footNote='<p class="footNote">Peak is a science-based estimate from your own data — not a medical measurement. It personalizes to you over ~30 days. Tap the “i” to see how it’s calculated.</p>';
-  document.getElementById('app').innerHTML=head+srcRow+feelBar+mCard+tk+nowSec+daySec+cafSec+footNote;
-  bindScrub(); bindFeel(); bindCaf();
+  // meds & substances — search any drug/pouch/nootropic
+  const medSec='<div class="sec"><span class="secNum">04</span><span class="secTitle">Meds &amp; substances</span><span class="secLine"></span></div>'+medCardHtml();
+
+  const footNote='<p class="footNote">Peak is a science-based estimate from your own data — not a medical measurement. It personalizes to you over ~30 days. Tap the “i” to see how it’s calculated. Meds are modeled for information only, never as dosing advice.</p>';
+  document.getElementById('app').innerHTML=head+srcRow+feelBar+mCard+tk+nowSec+daySec+cafSec+medSec+footNote;
+  bindScrub(); bindFeel(); bindCaf(); bindMed();
 }
 function feelBarHtml(){
   const f=latestFeelToday(); const val=f!=null?f:Math.round(energyAt(nowT()).e);
@@ -938,6 +1022,10 @@ document.addEventListener('click',e=>{
   const cc=e.target.closest('[data-clearcaf]'); if(cc){ if(confirm('Clear all of today’s caffeine?')) clearCaffToday(); return; }
   const ac=e.target.closest('[data-addcust]'); if(ac){ const n=document.getElementById('cafCustName'), m=document.getElementById('cafCustMg'); const mg=Math.round(+((m&&m.value)||0)); if(!mg||mg<=0){ alert('Enter the caffeine amount in mg.'); return; } addCustomCaff((n&&n.value)||'Custom', mg); return; }
   const cf=e.target.closest('[data-caf]'); if(cf){ logCaffeine(+cf.dataset.caf, cf.dataset.cafname||'Caffeine'); return; }
+  const md=e.target.closest('[data-medname]'); if(md){ logMedByName(md.dataset.medname); return; }
+  const rmm=e.target.closest('[data-rmmed]'); if(rmm){ removeMedLog(rmm.dataset.rmmed); return; }
+  const ccm=e.target.closest('[data-clearmed]'); if(ccm){ if(confirm('Clear all of today’s meds/substances?')) clearMedToday(); return; }
+  const am=e.target.closest('[data-addmed]'); if(am){ const n=document.getElementById('medCustName'), m=document.getElementById('medCustMg'); const mg=Math.round(+((m&&m.value)||0)); addCustomMed((n&&n.value)||'Custom', mg); return; }
   const rt=e.target.closest('[data-rate]'); if(rt){ captureRhr(); const f=rt.dataset.rate,v=+rt.dataset.val; draft[f]=(draft[f]===v?null:v); render(); return; }
   const wk=e.target.closest('[data-wake]'); if(wk){ captureRhr(); draft.wakeTime=(draft.wakeTime===wk.dataset.wake?null:wk.dataset.wake); render(); return; }
   const hr=e.target.closest('[data-hrs]'); if(hr){ captureRhr(); const v=+hr.dataset.hrs; draft.sleepHours=(draft.sleepHours===v?null:v); render(); return; }
@@ -962,6 +1050,9 @@ setInterval(()=>{ if(health())render(); }, 60000);
   const fs=await PatronDB.get('peakfeel');
   if(fs&&Array.isArray(fs.checks)){ const lf=loadFeel(); const seen={}; const all=fs.checks.concat(lf.checks); const merged=[]; all.forEach(c=>{ const key=c.t+'_'+c.pct; if(!seen[key]){seen[key]=1;merged.push(c);} }); merged.sort((a,b)=>a.t-b.t); _feelC=undefined; try{localStorage.setItem(FLOG,JSON.stringify({checks:merged}));}catch(e){} }
   else { PatronDB.set('peakfeel',loadFeel()); }
+  const md=await PatronDB.get('peakmeds');
+  if(md&&Array.isArray(md.logs)){ const loc=medStore(); const seen={}; const all=md.logs.concat(loc.logs); const merged=[]; all.forEach(l=>{ const k=l.id||(l.t+'_'+l.name); if(!seen[k]){seen[k]=1;merged.push(l);} }); merged.sort((a,b)=>a.t-b.t); const cust=(loc.custom&&loc.custom.length)?loc.custom:(md.custom||[]); try{localStorage.setItem(MEDLOG,JSON.stringify({logs:merged,custom:cust}));}catch(e){} }
+  else { PatronDB.set('peakmeds',medStore()); }
   clearCaches(); await new Promise(r=>setTimeout(r,300)); render();
 }catch(e){} })();
 </script>
