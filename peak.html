@@ -210,13 +210,28 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
 .feelPct{ font-family:var(--serif); font-style:italic; font-weight:600; font-size:32px; min-width:64px; text-align:right; }
 
 /* caffeine card */
-.cafTop{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:16px; }
-.cafStat{ display:flex; flex-direction:column; }
-.cafStatV{ font-family:var(--serif); font-style:italic; font-size:24px; }
-.cafStatL{ font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-top:2px; }
-.cafChips{ display:flex; gap:8px; flex-wrap:wrap; }
-.cafChip{ appearance:none; cursor:pointer; padding:10px 14px; border-radius:var(--pill); border:1px solid var(--line2); background:rgba(52,211,153,.06); color:var(--accent2); font-family:var(--mono); font-size:12px; transition:all .15s var(--ease); }
-.cafChip:hover{ background:rgba(52,211,153,.14); }
+.cafHero{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.cafHeroV{ font-family:var(--serif); font-style:italic; font-weight:600; font-size:32px; }
+.cafHeroV small{ font-family:var(--mono); font-size:11px; color:var(--muted); font-style:normal; letter-spacing:.04em; }
+.cafCeil{ font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.cafBar{ height:6px; border-radius:99px; background:rgba(255,255,255,.06); overflow:hidden; margin:12px 0 0; }
+.cafBarFill{ height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .5s var(--ease); }
+.cafBarFill.warn2{ background:linear-gradient(90deg,var(--accent),var(--warn)); }
+.cafBarFill.over{ background:linear-gradient(90deg,var(--warn),var(--low)); }
+.cafStats{ display:flex; margin:18px 0; border:1px solid var(--line); border-radius:var(--radius-sm); overflow:hidden; }
+.cafS{ flex:1; padding:13px 10px; text-align:center; border-right:1px solid var(--line); }
+.cafS:last-child{ border-right:0; }
+.cafSV{ font-family:var(--serif); font-style:italic; font-size:18px; }
+.cafSV small{ font-family:var(--mono); font-size:10px; color:var(--muted); font-style:normal; }
+.cafSL{ font-family:var(--mono); font-size:8px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-top:4px; }
+.cafQL{ font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); margin:0 0 11px; }
+.cafQL span{ color:var(--muted); letter-spacing:.04em; }
+.cafChips{ display:grid; grid-template-columns:repeat(auto-fill,minmax(108px,1fr)); gap:8px; }
+.cafChip{ appearance:none; cursor:pointer; padding:11px 12px; border-radius:var(--radius-sm); border:1px solid var(--line2); background:rgba(52,211,153,.05); text-align:left; transition:all .15s var(--ease); }
+.cafChip:hover{ background:rgba(52,211,153,.13); border-color:var(--accent); }
+.cafChipName{ display:block; font-family:var(--ui); font-size:13px; font-weight:600; color:var(--fg); }
+.cafChipMg{ display:block; font-family:var(--mono); font-size:10px; color:var(--muted); margin-top:3px; }
+.cafChipMg em{ color:var(--accent2); font-style:normal; font-weight:600; }
 .cafTip{ display:flex; gap:11px; align-items:flex-start; margin-top:16px; padding:13px 15px; border-radius:var(--radius-sm); background:rgba(255,255,255,.02); border:1px solid var(--line); }
 .cafTip.warn{ border-color:rgba(251,191,36,.3); background:rgba(251,191,36,.06); }
 .cafTipIcon{ font-size:17px; flex-shrink:0; }
@@ -505,15 +520,30 @@ function logCaffeine(mg,name){
 }
 // find the lowest point of the curve in the next `hrs` hours → the upcoming dip/crash
 function upcomingLow(fromT,hrs){ let lowT=fromT,lowE=energyAt(fromT).e; for(let t=fromT; t<=fromT+hrs; t+=0.25){ const e=energyAt(t).e; if(e<lowE){ lowE=e; lowT=t; } } return {t:lowT,e:lowE}; }
+/* ---- caffeine intelligence: limits, timing, clearance, dose impact ---- */
+function caffConsumedToday(){ const k=dKey(); return stimLogs().filter(l=>dayKey(new Date(l.t))===k).reduce((s,l)=>s+(+l.mg||0),0); }
+function caffCeiling(){ const p=profile(); const wt=(p&&p.weightKg)?p.weightKg:75; return Math.max(250,Math.min(400,Math.round(6*wt/10)*10)); } // FDA-safe daily ceiling
+function caffSweetDose(){ const p=profile(); const wt=(p&&p.weightKg)?p.weightKg:75; return Math.round(3*wt/5)*5; } // ~3mg/kg performance dose
+function caffClearHrs(){ return halfLifeH()*1.6; } // ~time to fall to a sleep-safe level
+function caffCutoffClock(){ const {bed}=wakeBed(); let c=((bed-caffClearHrs())%24+24)%24; return clockOf(c); }
+function caffClearsClock(){ const thr=25; if(caffeineNowMg()<thr) return null; for(let t=nowT(); t<=nowT()+24; t+=0.25){ if(bodyAt(tToMs(t))<thr) return clockOf(t); } return null; }
+function caffLift(mg){ const k=ke(); const tmax=Math.log(KA/k)/(KA-k); return Math.round(Math.min(22, doseAmount(mg,tmax)*0.14)); } // projected peak energy lift
+function pastCutoff(){ const {bed}=wakeBed(); const hrsToBed=((bed-nowT())+24)%24; return hrsToBed>0 && hrsToBed<caffClearHrs(); }
+// simulate a dose taken now → max energy from now to bed (uses the cached stim log array)
+function peakFromNow(){ let mx=2; const {bed}=wakeBed(); const end=bed>nowT()?bed:nowT()+4; for(let t=nowT(); t<=end; t+=0.25){ const e=energyAt(t).e; if(e>mx)mx=e; } return mx; }
+function peakWithExtra(mg){ const logs=stimLogs(); logs.push({mg:mg,t:Date.now()}); const v=peakFromNow(); logs.pop(); return v; }
+
 function caffeineCoach(){
   const caf=caffeineNowMg(); const {wake,bed}=wakeBed(); const t=nowT();
-  const hrsToBed=((bed-t)+24)%24;
-  if(caf>50 && hrsToBed>0 && hrsToBed<8) return {warn:true,icon:'⚠️',txt:'<b>'+Math.round(caf)+'mg on board</b>, ~'+Math.round(hrsToBed)+'h from bed. Stop now — more caffeine will cost you tonight’s sleep.'};
+  const consumed=caffConsumedToday(), ceil=caffCeiling();
+  if(consumed>=ceil) return {warn:true,icon:'⚠️',txt:'You’ve hit <b>'+Math.round(consumed)+'mg</b> — at/over your <b>'+ceil+'mg</b> daily ceiling. More now risks jitters + a worse crash.'};
+  if(pastCutoff()) return {warn:true,icon:'🌙',txt:'Past your caffeine cut-off (<b>'+caffCutoffClock()+'</b>). Anything now is still in your system at bedtime and will cost you deep sleep.'};
   const dip=upcomingLow(t+0.5,4);
-  if(caf<40 && dip.e<58 && (dip.t-t)<4){ const crash=upcomingLow(dip.t+1.5,5); return {warn:false,icon:'☕',txt:'Energy dips to <b>'+Math.round(dip.e)+'</b> around <b>'+clockOf(dip.t)+'</b>. A <b>double espresso</b> now lifts it — but expect a comedown near <b>'+clockOf(crash.t)+'</b>.'}; }
-  if(caf<20 && t>=wake && t<wake+4) return {warn:false,icon:'☕',txt:'You’re in your morning rise — a coffee now sharpens the first peak.'};
-  if(caf>0) return {warn:false,icon:'✅',txt:'<b>'+Math.round(caf)+'mg</b> in your system. Timing looks fine — no crash risk before bed.'};
-  return {warn:false,icon:'☕',txt:'No caffeine logged. Tap a drink below and the curve updates with its lift + crash.'};
+  if(caf<40 && dip.e<58 && (dip.t-t)<4.5){ const dbl=caffSweetDose()*1.4|0; const np=Math.round(peakWithExtra(dbl)); const crash=upcomingLow(dip.t+1.5,5);
+    return {warn:false,icon:'☕',txt:'Energy dips to <b>'+Math.round(dip.e)+'</b> near <b>'+clockOf(dip.t)+'</b>. A ~'+dbl+'mg hit now would push your peak to <b>'+np+'</b> — but watch for a comedown around <b>'+clockOf(crash.t)+'</b>.'}; }
+  if(caf<20 && t>=wake && t<wake+4) return {warn:false,icon:'☕',txt:'You’re in your morning rise — a <b>'+caffSweetDose()+'mg</b> dose now sharpens the first peak with the least sleep cost later.'};
+  if(caf>0) return {warn:false,icon:'✅',txt:'<b>'+Math.round(caf)+'mg</b> on board, '+Math.round(consumed)+'/'+ceil+'mg today. Timing’s clean — clears by '+(caffClearsClock()||'bedtime')+'.'};
+  return {warn:false,icon:'☕',txt:'Nothing logged yet. Your ideal dose is ~<b>'+caffSweetDose()+'mg</b>; tap a drink to see it lift the curve.'};
 }
 
 /* ============================================================
@@ -654,13 +684,23 @@ function bindFeel(){ const s=document.getElementById('feelSlider'); if(!s)return
   s.addEventListener('change',()=>{ addFeel(+s.value); render(); });
 }
 function caffeineCardHtml(){
-  const caf=Math.round(caffeineNowMg()); const tip=caffeineCoach();
-  const chips=CAF_QUICK.map(c=>'<button class="cafChip" data-caf="'+c[1]+'" data-cafname="'+esc(c[0])+'">'+esc(c[0])+' · '+c[1]+'mg</button>').join('');
-  return '<div class="card cafCard"><div class="cafTop">'
-    +'<div class="cafStat"><div class="cafStatV">'+caf+'<small style="font-size:13px;color:var(--muted)"> mg</small></div><div class="cafStatL">On board now</div></div>'
-    +'<div class="cafChips">'+chips+'</div></div>'
+  const consumed=Math.round(caffConsumedToday()), ceil=caffCeiling(), board=Math.round(caffeineNowMg());
+  const pct=Math.min(100,Math.round(consumed/ceil*100));
+  const barCls = consumed>ceil?'over':(consumed>ceil*0.75?'warn2':'');
+  const tip=caffeineCoach();
+  const chips=CAF_QUICK.map(c=>{ const lift=caffLift(c[1]); return '<button class="cafChip" data-caf="'+c[1]+'" data-cafname="'+esc(c[0])+'"><span class="cafChipName">'+esc(c[0])+'</span><span class="cafChipMg">'+c[1]+'mg <em>+'+lift+'</em></span></button>'; }).join('');
+  return '<div class="card cafCard">'
+    +'<div class="cafHero"><div class="cafHeroV">'+consumed+'<small> mg today</small></div><div class="cafCeil">'+board+'mg on board · ceiling '+ceil+'mg</div></div>'
+    +'<div class="cafBar"><div class="cafBarFill '+barCls+'" style="width:'+pct+'%"></div></div>'
+    +'<div class="cafStats">'
+    +'<div class="cafS"><div class="cafSV">'+caffCutoffClock()+'</div><div class="cafSL">Cut-off</div></div>'
+    +'<div class="cafS"><div class="cafSV">'+(caffClearsClock()||'Clear')+'</div><div class="cafSL">Out of system</div></div>'
+    +'<div class="cafS"><div class="cafSV">'+caffSweetDose()+'<small> mg</small></div><div class="cafSL">Ideal dose</div></div>'
+    +'</div>'
+    +'<p class="cafQL">Quick log <span>· +N = projected energy lift</span></p>'
+    +'<div class="cafChips">'+chips+'</div>'
     +'<div class="cafTip'+(tip.warn?' warn':'')+'"><span class="cafTipIcon">'+tip.icon+'</span><span class="cafTipTxt">'+tip.txt+'</span></div>'
-    +'<p class="derived" style="margin-top:12px">Tapping a drink also logs it to your <a href="stimulant.html" style="color:var(--accent2)">Stimulant tracker</a> — and the curve updates with its lift + crash.</p></div>';
+    +'<p class="derived" style="margin-top:12px">Each tap logs to your <a href="stimulant.html" style="color:var(--accent2)">Stimulant tracker</a> and updates the curve. Caffeine takes ~45 min to absorb — “on board” climbs after you drink.</p></div>';
 }
 
 /* ============================================================
