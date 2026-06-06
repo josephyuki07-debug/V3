@@ -287,6 +287,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-ui), -ap
  * ============================================================ */
 const APPS = [
   { file: 'peak.html',        name: 'Peak',        tag: 'Daily readiness · energy curve',        icon: '🔆', wide: true },
+  { file: 'peak-demo.html',   name: 'Peak Demo',   tag: 'Backtested copy — verified working',     icon: '🔆', wide: true },
   { file: 'finance.html',     name: 'Finance',     tag: 'Net worth · subs · orders · wishlist', icon: '💰', wide: true },
   { file: 'gym.html',         name: 'Gym',         tag: 'Progressive overload coach',           icon: '🏋️', wide: true },
   { file: 'supplements.html', name: 'Supplements', tag: 'Your stack + smart recommendations',   icon: '💊' },
@@ -546,6 +547,7 @@ const ART = {
   'recovery.html':'linear-gradient(135deg,#22D3EE,#34D399)',
   'macros.html':'linear-gradient(135deg,#F59E0B,#EF4444)',
   'peak.html':'linear-gradient(135deg,#34D399,#22D3EE)',
+  'peak-demo.html':'linear-gradient(135deg,#34D399,#22D3EE)',
   'meds.html':'linear-gradient(135deg,#34D399,#22D3EE)',
 };
 function artFor(file){ return ART[file] || 'linear-gradient(135deg,#8B5CF6,#22D3EE)'; }
