@@ -22,7 +22,7 @@ img{max-width:100%;height:auto}
 <title>Liam · dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=Exo+2:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=Exo+2:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("patron_theme")||"nocturne");}catch(e){document.documentElement.setAttribute("data-theme","nocturne");}</script>
 <script src="icons.js?v=1"></script>
 <style>
@@ -276,8 +276,52 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-ui), -ap
 .howtoFoot { margin: var(--space-3) 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
 </style>
 <script src="gate.js"></script>
+<style id="vitality-skin">
+/* ===== Vitality skin — black canvas, mint, Instrument Serif, grain, backdrop ===== */
+html[data-theme]{
+  --bg:#000;--bg-elevated:#0a0a0a;
+  --surface:rgba(255,255,255,.02);--surface-2:rgba(255,255,255,.04);
+  --fg:#fff;--muted:rgba(255,255,255,.5);--muted-strong:rgba(255,255,255,.7);
+  --border:rgba(255,255,255,.08);--border-strong:rgba(255,255,255,.16);
+  --brand:#6EE7B7;--brand-2:#6EE7B7;--brand-ink:#04130c;
+  --brand-soft:rgba(110,231,183,.10);--brand-line:rgba(110,231,183,.30);--brand-glow:rgba(110,231,183,.45);
+  --pos:#6EE7B7;--pos-soft:rgba(110,231,183,.14);--pos-line:rgba(110,231,183,.34);
+  --neg:#EF4444;--neg-soft:rgba(239,68,68,.14);--neg-line:rgba(239,68,68,.3);
+  --warn:#F59E0B;--track:rgba(255,255,255,.06);
+  --card-shadow:0 1px 0 rgba(110,231,183,.06) inset,0 22px 50px -28px rgba(0,0,0,.95);
+  --font-display:'Instrument Serif';--font-ui:'Inter';
+}
+body{ background:#000 !important; font-family:'Inter',-apple-system,sans-serif; }
+.title{ text-transform:none !important; letter-spacing:-.02em !important; font-style:italic !important; font-weight:400 !important; background:none !important; -webkit-text-fill-color:currentColor !important; color:var(--fg) !important; filter:none !important; }
+.subtitle{ font-family:var(--font-mono) !important; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+.cardName{ font-style:italic; text-transform:none; letter-spacing:0; }
+.vitalsEmptyTitle,.panelTitle,.recNum{ font-style:italic; }
+/* backdrop layers */
+.vk-atmosphere{ position:fixed; inset:0; z-index:0; pointer-events:none; background-image:
+   radial-gradient(60% 50% at 50% 30%,rgba(110,231,183,.16) 0%,rgba(110,231,183,.06) 32%,rgba(110,231,183,0) 65%),
+   radial-gradient(28% 22% at 50% 38%,rgba(255,226,181,.07) 0%,rgba(255,226,181,0) 70%),
+   radial-gradient(120% 80% at 50% 100%,rgba(14,38,30,.5) 0%,rgba(4,6,10,.95) 75%);
+  background-repeat:no-repeat; background-size:100% 100%; }
+.vk-mountains{ position:fixed; left:0; right:0; bottom:0; z-index:0; height:30vh; min-height:180px; pointer-events:none; opacity:.8; }
+.vk-mountains svg{ width:100%; height:100%; display:block; }
+.vk-particles{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+.vk-particles span{ position:absolute; border-radius:50%; background:rgba(233,239,233,.7); box-shadow:0 0 6px rgba(167,243,208,.5); animation:vk-drift linear infinite; }
+@keyframes vk-drift{ 0%{transform:translate3d(0,0,0);opacity:0} 10%{opacity:.7} 90%{opacity:.55} 100%{transform:translate3d(var(--dx,12px),var(--dy,-100vh),0);opacity:0} }
+.page{ position:relative; z-index:1; }
+/* tile cascade entrance + hover glow + parallax */
+.bento .card{ opacity:0; transform:translateY(12px) scale(.97); animation:vk-tile-in .8s var(--ease-premium) forwards; }
+@keyframes vk-tile-in{ to{ opacity:1; transform:none } }
+.bento .card:nth-child(1){animation-delay:.10s}.bento .card:nth-child(2){animation-delay:.16s}.bento .card:nth-child(3){animation-delay:.22s}.bento .card:nth-child(4){animation-delay:.28s}.bento .card:nth-child(5){animation-delay:.34s}.bento .card:nth-child(6){animation-delay:.40s}.bento .card:nth-child(7){animation-delay:.46s}.bento .card:nth-child(8){animation-delay:.52s}.bento .card:nth-child(9){animation-delay:.58s}.bento .card:nth-child(n+10){animation-delay:.64s}
+.card{ transition:transform .48s var(--ease-premium), border-color .2s var(--ease), box-shadow .3s var(--ease) !important; }
+.card:hover{ border-color:rgba(110,231,183,.35) !important; box-shadow:0 0 40px rgba(110,231,183,.08) !important; }
+.cardArtIcon{ transition:transform .24s var(--ease-premium); }
+@media (prefers-reduced-motion:reduce){ .bento .card,.vk-particles span{ animation:none !important; opacity:1 !important; transform:none !important; } }
+</style>
 </head>
 <body>
+<div class="vk-atmosphere" aria-hidden></div>
+<div class="vk-mountains" aria-hidden><svg viewBox="0 0 1600 420" preserveAspectRatio="none"><defs><linearGradient id="vkmtf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0d1a17" stop-opacity="0"/><stop offset="55%" stop-color="#0d1a17" stop-opacity=".55"/><stop offset="100%" stop-color="#0d1a17" stop-opacity=".95"/></linearGradient><linearGradient id="vkmtn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#050a09" stop-opacity=".4"/><stop offset="60%" stop-color="#050a09" stop-opacity=".95"/><stop offset="100%" stop-color="#050a09" stop-opacity="1"/></linearGradient></defs><path d="M0,300 L120,230 L210,260 L320,180 L430,220 L560,150 L680,210 L820,170 L960,220 L1100,180 L1240,240 L1380,200 L1500,250 L1600,220 L1600,420 L0,420 Z" fill="url(#vkmtf)"/><path d="M0,360 L100,320 L220,340 L340,290 L460,330 L590,300 L720,340 L860,310 L1000,350 L1140,310 L1280,355 L1420,320 L1540,360 L1600,340 L1600,420 L0,420 Z" fill="url(#vkmtn)"/></svg></div>
+<div class="vk-particles" id="vkParticles" aria-hidden></div>
 <main class="page grain-overlay">
   <div class="shell" id="app"></div>
 </main>
@@ -963,5 +1007,13 @@ applyTheme(currentTheme);
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="db.js?v=15"></script>
 <script src="brand.js?v=16"></script>
+<script>
+(function(){
+  var root=document.getElementById('vkParticles');
+  if(root){ var N=window.innerWidth<640?14:24; for(var i=0;i<N;i++){ var s=document.createElement('span'); s.style.left=(Math.random()*100)+'%'; s.style.top=(60+Math.random()*40)+'%'; var sz=1.2+Math.random()*1.2; s.style.width=s.style.height=sz+'px'; var dur=22+Math.random()*28; s.style.animationDuration=dur+'s'; s.style.animationDelay=(-Math.random()*dur)+'s'; s.style.setProperty('--dx',(Math.random()*30-15)+'px'); s.style.setProperty('--dy',(-(60+Math.random()*50))+'vh'); root.appendChild(s);} }
+  document.addEventListener('mousemove',function(e){ var c=e.target.closest&&e.target.closest('.bento .card'); if(!c)return; var r=c.getBoundingClientRect(); var dx=(e.clientX-r.left-r.width/2)/(r.width/2), dy=(e.clientY-r.top-r.height/2)/(r.height/2); var art=c.querySelector('.cardArtIcon'); if(art)art.style.transform='translate3d('+(dx*6).toFixed(1)+'px,'+(dy*6).toFixed(1)+'px,0)'; },{passive:true});
+  document.addEventListener('mouseout',function(e){ var c=e.target.closest&&e.target.closest('.bento .card'); if(c){ var art=c.querySelector('.cardArtIcon'); if(art)art.style.transform=''; } });
+})();
+</script>
 </body>
 </html>
