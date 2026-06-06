@@ -614,7 +614,7 @@ const SUP = (function(){
     // recommendations
     let recBody;
     if(!recs.length){ recBody='<p class="en-muted">Nothing strongly indicated yet. Add more stack items and fill in your profile — recommendations tune as signals come in.</p>'; }
-    else { const packed=packToBudget(recs,budget); const totalIn=packed.inBudget.reduce((s,r)=>s+r.rec.supplement.priceUsdMonthly,0);
+    else { const packed=packToBudget(recs,budget); const totalIn=packed.inBudget.reduce((s,r)=>s+r.supplement.priceUsdMonthly,0);
       recBody='<div class="en-budget"><label for="supBudget">Budget / mo</label><input id="supBudget" type="number" inputmode="numeric" min="0" value="'+budget+'"></div>'
         +packed.all.map(({rec,fits})=>{ const s=rec.supplement; const why=rec.reasons.map(r=>'<span class="en-tag">'+esc(SIGNAL_LABELS[r]||r)+'</span>').join('');
           return '<div class="en-rec'+(fits?'':' dim')+'"><div class="en-recTop"><div class="en-recName">'+esc(s.icon)+' '+esc(s.name)+'<small>'+esc(s.dose)+'</small></div><div class="en-recPrice">$'+s.priceUsdMonthly+'/mo</div></div>'
