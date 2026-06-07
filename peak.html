@@ -762,7 +762,7 @@ const SCHED='peak_schedule_v1'; let planOpen=false;
  * stale saved tasks once (the file is the source of truth, like the style),
  * while still letting you add/drag/edit in Peak afterwards (your edits save
  * under today's key with the current seed and win until the next day or ship). */
-const SCHED_SEED='lab-2026-06-07f';
+const SCHED_SEED='lab-2026-06-07g';
 const DEFAULT_SCHED=[
   { id:'t1', label:'Morning',   start:6,    end:8,    durH:2,   color:'#6EE7B7', icon:'☀', diff:'easy', locked:true,  explicit:true, gap:false },
   { id:'t2', label:'Claude',    start:9,    end:11.5, durH:2.5, color:'#A78BFA', icon:'✦', diff:'med',  locked:false, explicit:true, gap:false },
@@ -879,9 +879,26 @@ function snapFree(desired,dur,others){
   fit.forEach(g=>{ const s=clamp(desired,g[0],g[1]-dur); const d=Math.abs(s-desired); if(d<bd){ bd=d; best=s; } });
   return Math.round(best*4)/4;
 }
+/* best-energy start for a task INSIDE an armed window [lo,hi] — same hard→peak /
+ * easy→low / med→mid scoring as bestSlot, but scoped to the window and skipping
+ * any sub-range already taken by another task. null = nothing of length dur fits. */
+function bestStartIn(lo,hi,dur,diff,others){ dur=Math.max(0.25,Math.min(dur,hi-lo));
+  const score=avg=> diff==='hard'?avg : diff==='easy'?(100-avg) : (100-Math.abs(avg-65));
+  let gaps=[],t=lo; others.slice().sort((a,b)=>a.start-b.start).forEach(o=>{ if(o.end<=lo||o.start>=hi)return; if(o.start>t)gaps.push([t,Math.min(o.start,hi)]); t=Math.max(t,o.end); });
+  if(t<hi)gaps.push([t,hi]); gaps=gaps.filter(g=>g[1]-g[0]>=dur-1e-6); if(!gaps.length)return null;
+  let best=null,bs=-1e9; gaps.forEach(g=>{ for(let st=g[0]; st+dur<=g[1]+1e-6; st+=0.25){ let sum=0,n=0; for(let x=st;x<st+dur;x+=0.25){ sum+=energyAt(x).e; n++; } const sc=score(sum/(n||1)); if(sc>bs){ bs=sc; best=st; } } });
+  return best==null?null:Math.round(best*4)/4; }
+/* place a task into an armed window: "fill"/"full" spans the whole window; otherwise
+ * we drop it on the best-energy FREE slot inside the window (never pinned to win[0] /
+ * wake — that was the 6:45 stacking bug), and never overlap an existing task. */
+function placeInWindow(p,lo,hi,list){ const others=list.filter(x=>x&&!x.gap&&x.start!=null);
+  if(p.fill){ p.start=lo; p.end=hi; p.durH=hi-lo; p.explicit=true; return p; }
+  const dur=Math.max(0.25,Math.min(taskDur(p),hi-lo));
+  let st=bestStartIn(lo,hi,dur,p.diff,others); if(st==null)st=snapFree(lo,dur,others);
+  p.start=st; p.end=Math.min(24,st+dur); p.durH=p.end-p.start; p.explicit=true; return p; }
 function addSched(str, win){ if(!str||!str.trim())return; const tasks=loadSched(); str.split(/,|;|\band\b/i).forEach(pStr=>{ const p=parseTask(pStr); if(!p)return;
     if(p.gap){ if(win){ p.rStart=win[0]; p.rEnd=win[1]; } tasks.push(p); return; }
-    if(win){ const d=p.fill?(win[1]-win[0]):Math.min(taskDur(p),win[1]-win[0]); p.start=win[0]; p.end=Math.min(win[1],win[0]+d); if(p.end-p.start<0.1)p.end=win[1]; p.durH=p.end-p.start; p.explicit=true; }
+    if(win){ placeInWindow(p, win[0], win[1], tasks.filter(x=>!x.gap)); }
     else if(!p.explicit||p.start==null){ placeTask(p,tasks.filter(x=>!x.gap)); } else { p.start=((p.start%24)+24)%24; p.end=Math.max(p.start+0.25,Math.min(24,p.end)); }
     tasks.push(p); });
   tasks.sort((a,b)=>(a.start==null?99:a.start)-(b.start==null?99:b.start)); saveSched(tasks); }
@@ -904,10 +921,9 @@ function schArmHour(hour){ const fixed=fixedTasks(); const inside=fixed.find(t=>
   schSel=[]; schArmWin=g?{lo:g[0],hi:g[1]}:null; schPending=null; render(); }
 function schClashWith(s0,e0){ return loadSched().filter(x=>!x.gap&&x.start!=null && x.start<e0-1e-6 && x.end>s0+1e-6); }
 function runSchedPrompt(str){ if(!str||!str.trim())return; const g=schGapWindow(); const win=(g&&g.hi>g.lo+0.05)?[g.lo,g.hi]:null;
-  if(win && str.split(/,|;|\band\b/i).length===1){ const p=parseTask(str);
-    if(p&&!p.gap){ const lo=win[0],hi=win[1]; const d=p.fill?(hi-lo):Math.min(taskDur(p),hi-lo); const e0=Math.min(hi,lo+d);
-      if(schClashWith(lo,e0).length){ schPending={str:str,win:win,name:schClashWith(lo,e0)[0].label}; render(); return; } } }
-  schSel=[]; schArmWin=null; addSched(str,win); }
+  // placeInWindow already drops the task on the best FREE slot inside the window
+  // (never win[0]/wake, never overlapping), so no clash prompt is needed here.
+  schSel=[]; schArmWin=null; schPending=null; addSched(str,win); }
 function schApply(mode){ if(!schPending)return; const {str,win}=schPending; const p=parseTask(str); if(!p){ schPending=null; render(); return; }
   const lo=win[0],hi=win[1], tasks=loadSched();
   if(mode==='fit'){ const occ=tasks.filter(t=>!t.gap&&t.start!=null).map(t=>({start:t.start,end:t.end})); const segs=freeWithin(lo,hi,occ);
