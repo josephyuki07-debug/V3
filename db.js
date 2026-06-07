@@ -56,6 +56,7 @@ window.PatronDB = (function () {
       || k.indexOf('po_supabase') === 0
       || k === TS_KEY || k === PH_KEY
       || k === 'patron_theme'                   // theme is a per-device preference
+      || k === 'peak_schedule_v1'               // schedule is regenerated from the file (seed) — never sync stale tasks
       || k.indexOf('patron_hydrated_') === 0
       || k.indexOf('patron_initreload_') === 0
       || k.indexOf('patron_snapadopt_') === 0;
