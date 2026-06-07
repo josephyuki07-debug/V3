@@ -255,7 +255,8 @@
     <div class="sendGroup">
       <button id="dlLab" class="labBtn" title="Download this Schedule Lab as a single file you can open on any computer">⬇ Download</button>
       <button id="copyCfg" class="labBtn" title="Copy this style as JSON">Copy config</button>
-      <button id="sendPeak" class="labBtn primary" title="Send this exact style to your Peak tracker">Send to Peak →</button>
+      <button id="copyTheme" class="labBtn primary" title="Copy a share code your Patreon subscribers paste into their own Peak (graph color + background + card style + tasks)">🎨 Copy theme code</button>
+      <button id="sendPeak" class="labBtn" title="Send this exact style to your own Peak tracker (same browser)">Send to Peak →</button>
     </div>
   </div>
 
@@ -296,6 +297,7 @@
         </div>
       </div>
       <div class="ctl inline"><label>Accent</label><input type="color" id="acc" value="#6EE7B7" /></div>
+      <div class="ctl inline"><label>Background</label><input type="color" id="bgC" value="#000000" /></div>
       <div class="ctl"><label>Difficulty colors</label>
         <div style="display:flex; gap:14px; align-items:center; font-size:11px; color:var(--muted)">
           <span>easy <input type="color" id="dE" value="#6EE7B7" /></span>
@@ -488,7 +490,7 @@ try{ var _savedTasks=JSON.parse(localStorage.getItem(TASKS_KEY)||'null'); if(_sa
 function saveTasks(){ try{ localStorage.setItem(TASKS_KEY, JSON.stringify(TASKS)); }catch(e){} }
 
 /* ---------- style state ---------- */
-var S={ fill:'grad', colorMode:'auto', acc:'#6EE7B7', op:0.18, rad:10, pill:'glass', pos:'top', bd:true, icon:true, dur:true, now:true, valcol:false, nowH:13.46, bed:22.75 };
+var S={ fill:'grad', colorMode:'auto', acc:'#6EE7B7', op:0.18, rad:10, pill:'glass', pos:'top', bd:true, icon:true, dur:true, now:true, valcol:false, bg:'#000000', nowH:13.46, bed:22.75 };
 // armed-window state — declared up here so the first drawBands()/gapWindow() call can read them
 var selIds=[];   // up to two "armed" chips — typing a task fills the gap between them
 var armWin=null; // a window armed by clicking a free stretch of the chart
@@ -782,10 +784,12 @@ function syncUI(){
   document.getElementById('op').value=S.op; document.getElementById('opV').textContent=S.op;
   document.getElementById('rad').value=S.rad; document.getElementById('radV').textContent=S.rad;
   document.getElementById('acc').value=S.acc;
+  document.getElementById('bgC').value=S.bg;
 }
 
 segWire('fillSeg','fill'); segWire('colorSeg','colorMode'); segWire('pillSeg','pill'); segWire('posSeg','pos');
 document.getElementById('acc').addEventListener('input',function(){ S.acc=this.value; document.documentElement.style.setProperty('--acc',this.value); redraw(); });
+document.getElementById('bgC').addEventListener('input',function(){ S.bg=this.value; document.documentElement.style.setProperty('--bg',this.value); redraw(); });
 document.getElementById('op').addEventListener('input',function(){ S.op=parseFloat(this.value); document.getElementById('opV').textContent=this.value; drawBands(); });
 document.getElementById('rad').addEventListener('input',function(){ S.rad=parseFloat(this.value); document.getElementById('radV').textContent=this.value; drawBands(); });
 document.getElementById('bd').addEventListener('change',function(){ S.bd=this.checked; drawBands(); });
@@ -800,6 +804,7 @@ var pr=document.getElementById('presets');
 Object.keys(PRESETS).forEach(function(name){ var b=document.createElement('button'); b.textContent=name; b.addEventListener('click',function(){ applyPreset(name); }); pr.appendChild(b); });
 
 document.documentElement.style.setProperty('--acc', S.acc);
+document.documentElement.style.setProperty('--bg', S.bg);
 drawChart(); drawBands(); drawEditor();
 
 /* ============================================================
@@ -1008,6 +1013,12 @@ document.getElementById('sendPeak').addEventListener('click',function(){
   }catch(e){ labToast('Could not save — storage blocked'); }
 });
 document.getElementById('copyCfg').addEventListener('click',function(){ var json=JSON.stringify(fullCfg()); function done(){ labToast('✓ Full schedule + style copied (JSON)'); } if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(json).then(done,function(){ window.prompt('Copy the full schedule + style:', json); }); } else { window.prompt('Copy the full schedule + style:', json); } });
+/* ---------- Copy theme code ----------
+ * A compact, shareable PEAK-THEME code: graph/accent color + background +
+ * card style + the schedule tasks. Post it on Patreon; a subscriber pastes it
+ * into "Import a creator theme" in their own Peak and gets your exact look. */
+function themeCode(){ var theme={ v:1, style:styleCfg(), bg:S.bg, tasks:fullCfg().tasks }; return 'PEAK-THEME:'+btoa(unescape(encodeURIComponent(JSON.stringify(theme)))); }
+document.getElementById('copyTheme').addEventListener('click',function(){ var code=themeCode(); function done(){ labToast('✓ Theme code copied — share it on Patreon; subscribers paste it into Peak'); } if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(done,function(){ window.prompt('Copy your theme code (share on Patreon):', code); }); } else { window.prompt('Copy your theme code (share on Patreon):', code); } });
 /* ---------- Download this Lab as a single standalone file ----------
  * Schedule Lab is one self-contained HTML file (all CSS + JS inline). This
  * saves a copy you can keep and double-click on any computer — no install. */

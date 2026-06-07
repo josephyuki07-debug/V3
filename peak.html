@@ -369,6 +369,18 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
 .schInput{ flex:1; background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:var(--radius-sm); padding:13px 15px; color:var(--fg); font-family:var(--ui); font-size:14px; }
 .schInput:focus{ outline:none; border-color:var(--accent); }
 .schAdd{ appearance:none; cursor:pointer; padding:0 18px; border:0; border-radius:var(--radius-sm); font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#04130c; background:linear-gradient(120deg,var(--accent),var(--accent2)); }
+/* creator-theme import (paste a PEAK-THEME code) */
+.schTheme{ margin-top:12px; }
+.schThemeToggle{ appearance:none; cursor:pointer; background:none; border:0; padding:0; font-family:var(--mono); font-size:11px; letter-spacing:.04em; color:var(--muted2); }
+.schThemeToggle:hover{ color:var(--fg); }
+.schThemeToggle.active{ color:var(--accent2); }
+.schThemeRow{ display:flex; gap:8px; margin-top:10px; }
+.schThemeIn{ flex:1; background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:var(--radius-sm); padding:11px 13px; color:var(--fg); font-family:var(--mono); font-size:12px; }
+.schThemeIn:focus{ outline:none; border-color:var(--accent); }
+.schThemeApply{ appearance:none; cursor:pointer; padding:0 16px; border:1px solid var(--accent); border-radius:var(--radius-sm); font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--accent2); background:rgba(110,231,183,.08); }
+.schThemeHint{ margin-top:7px; font-family:var(--mono); font-size:10px; color:var(--muted); }
+.schThemeReset{ appearance:none; cursor:pointer; background:none; border:0; padding:0; font-family:var(--mono); font-size:10px; color:var(--warn); }
+.schThemeReset:hover{ text-decoration:underline; }
 .schHint{ font-family:var(--mono); font-size:10px; letter-spacing:.06em; color:var(--muted); margin-top:-6px; }
 .schRow{ display:flex; gap:8px; flex-wrap:wrap; }
 .schChip{ display:inline-flex; align-items:center; gap:9px; padding:9px 10px 9px 13px; border-radius:var(--pill); border:1px solid var(--line); background:rgba(255,255,255,.02); border-left:3px solid var(--dc); font-size:13px; color:var(--fg); }
@@ -808,7 +820,31 @@ function diffOf(s){ if(/\b(hard|intense|deep|heavy|max|pr|grind)\b/i.test(s))ret
  * -------------------------------------------------------------------- */
 const SCHED_STYLE_DEFAULT={ fill:'grad', op:0.18, rad:10, colorMode:'auto', acc:'#6EE7B7', pill:'glass', pos:'top', bd:true, icon:true, dur:true, now:true, valcol:false, diff:{ easy:'#6EE7B7', med:'#F59E0B', hard:'#FF50A6' } };
 try{ localStorage.removeItem('peak_sched_style_v1'); }catch(e){}
-function schedStyle(){ const s=Object.assign({},SCHED_STYLE_DEFAULT); s.diff=Object.assign({},SCHED_STYLE_DEFAULT.diff); return s; }
+/* ----------------------------------------------------------------------
+ * Creator themes — a shareable "look" (graph/accent color + background +
+ * card style, optionally the schedule too) that a subscriber pastes in as a
+ * PEAK-THEME code. SCHED_STYLE_DEFAULT is the baked default; an imported
+ * theme (peak_theme_v1) is an explicit, user-chosen OVERRIDE that wins until
+ * they reset. (Different from the old auto Send-to-Peak key we still nuke.) */
+const PEAK_THEME='peak_theme_v1';
+function loadTheme(){ try{ const t=JSON.parse(localStorage.getItem(PEAK_THEME)||'null'); return (t&&(t.style||t.bg))?t:null; }catch(e){ return null; } }
+function schedStyle(){ const t=loadTheme(); const s=Object.assign({},SCHED_STYLE_DEFAULT,(t&&t.style)||{}); s.diff=Object.assign({},SCHED_STYLE_DEFAULT.diff,(t&&t.style&&t.style.diff)||{}); return s; }
+function graphColor(){ const c=schedStyle().acc; return (typeof c==='string'&&c)?c:'#34D399'; }   // the energy-curve line/area/dot color = the theme accent
+function applyThemeBg(){ const t=loadTheme(); const r=document.documentElement; if(t&&t.bg){ r.style.setProperty('--bg',t.bg); } else { r.style.removeProperty('--bg'); } }
+/* PEAK-THEME:<base64 json> → {style, bg, tasks?}. Returns true on success. */
+function importThemeCode(code){ try{
+    let s=String(code||'').trim().replace(/^PEAK-?THEME:?/i,'').trim(); if(!s)return false;
+    const cfg=JSON.parse(decodeURIComponent(escape(atob(s))));
+    if(!cfg||(!cfg.style&&!cfg.bg&&!cfg.tasks))return false;
+    localStorage.setItem(PEAK_THEME, JSON.stringify({v:1, style:cfg.style||{}, bg:cfg.bg||null}));
+    if(Array.isArray(cfg.tasks)&&cfg.tasks.length && confirm('Also replace your schedule with the creator’s tasks?')){
+      const tasks=cfg.tasks.map(t=>({ id:t.id||('k_'+Math.random().toString(36).slice(2,8)), label:t.label||t.name||'Task', start:t.start, end:t.end, durH:t.durH||((t.end!=null&&t.start!=null)?t.end-t.start:1), color:t.color, icon:t.icon, diff:t.diff||'med', locked:(t.locked!=null?!!t.locked:!!t.explicit), explicit:(t.explicit!=null?!!t.explicit:(t.start!=null)), gap:!!t.gap, size:t.size, rStart:(t.rStart!=null?t.rStart:null), rEnd:(t.rEnd!=null?t.rEnd:null) }));
+      saveSched(tasks);
+    }
+    applyThemeBg(); render(); return true;
+  }catch(e){ return false; } }
+function resetTheme(){ try{ localStorage.removeItem(PEAK_THEME); }catch(e){} document.documentElement.style.removeProperty('--bg'); render(); }
+let themeOpen=false;
 function hex2rgb(h){ h=String(h||'').replace('#',''); if(h.length===3)h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); return isFinite(n)?[(n>>16)&255,(n>>8)&255,n&255]:[110,231,183]; }
 function toRGBA(css,a){ let c; if(typeof css==='string'&&css[0]==='#')c=hex2rgb(css); else { const m=String(css).match(/\d+/g); c=m?[+m[0],+m[1],+m[2]]:[110,231,183]; } return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')'; }
 function diffColor(d){ const c=schedStyle().diff; return c[d]||c.med; }
@@ -1068,7 +1104,13 @@ let _schResizeT=null;
 window.addEventListener('resize',()=>{ clearTimeout(_schResizeT); _schResizeT=setTimeout(layoutSchedPills,120); });
 function scheduleHtml(){
   const tasks=loadSched(), cur=curTask(), nxt=nextTask();
-  const input='<div class="schInputRow"><input id="schInput" class="schInput" placeholder="e.g. school 8-2, gym 1930 hard, gap claude" autocomplete="off"><button class="schAdd" data-addsched="1">＋ Add</button></div><div class="schHint">fixed task = give a time (9-11) · “big gap claude” fills your whole free day · “small gap homework” fills only the short windows between tasks · gaps never touch sleep · easy/medium/hard = color <span style="opacity:.6">· build '+SCHED_SEED+'</span></div>';
+  const _hasTheme=!!loadTheme();
+  const themeBlock='<div class="schTheme">'
+    +'<button class="schThemeToggle'+(themeOpen?' on':'')+(_hasTheme?' active':'')+'" data-themeimport="1">🎨 '+(_hasTheme?'Creator theme active':'Import a creator theme')+'</button>'
+    +(themeOpen?'<div class="schThemeRow"><input id="themeCode" class="schThemeIn" placeholder="Paste a PEAK-THEME… code" autocomplete="off"><button class="schThemeApply" data-themeapply="1">Apply</button></div>'
+      +'<div class="schThemeHint">A creator shares a code; pasting it sets the graph color, background &amp; card style'+(_hasTheme?' <button class="schThemeReset" data-themereset="1">· reset to default</button>':'')+'</div>':'')
+    +'</div>';
+  const input='<div class="schInputRow"><input id="schInput" class="schInput" placeholder="e.g. school 8-2, gym 1930 hard, gap claude" autocomplete="off"><button class="schAdd" data-addsched="1">＋ Add</button></div><div class="schHint">fixed task = give a time (9-11) · “big gap claude” fills your whole free day · “small gap homework” fills only the short windows between tasks · gaps never touch sleep · easy/medium/hard = color <span style="opacity:.6">· build '+SCHED_SEED+'</span></div>'+themeBlock;
   // workout nudge: you've trained recently but not today
   const wOut = (!gymLoggedToday() && gymDaysLast7()>=1) ? '<div class="schWorkout"><button class="schWoBtn" data-workout="1">🏋️ You’ve been training — work out today?</button>'+(workoutOpen?'<div class="schWoOpts">'+[['45m',0.75],['1h',1],['1h 30m',1.5],['2h',2]].map(o=>'<button class="schWoOpt" data-addworkout="'+o[1]+'">'+o[0]+'</button>').join('')+'</div>':'')+'</div>' : '';
   const row = tasks.length ? '<div class="schRow">'+tasks.map(t=>{ const time = t.gap ? (t.rStart!=null?clockOf(t.rStart)+'–'+clockOf(t.rEnd):(t.size==='small'?'small gaps':'fills day')) : clockOf(t.start);
@@ -1101,7 +1143,8 @@ function planLaneHtml(){
   if(planOpen) drop='<div class="planDrop">'+segs.map(t=>{ const e=Math.round(energyAt(t.start).e); return '<div class="planItem"><span class="planDot" style="background:'+diffColor(t.diff)+'"></span><span class="planItemL">'+esc(t.label)+(t.gap?' <em style="color:var(--muted);font-style:normal;font-size:10px">gap</em>':'')+'</span><span class="planItemTime">'+fmtRange(t.start,t.end)+'</span><span class="planItemPk">peak '+e+'</span></div>'; }).join('')+'</div>';
   return head+summary+drop;
 }
-function bindSched(){ const i=document.getElementById('schInput'); if(i)i.addEventListener('keydown',e=>{ if(e.key==='Enter'){ runSchedPrompt(i.value); } }); }
+function bindSched(){ const i=document.getElementById('schInput'); if(i)i.addEventListener('keydown',e=>{ if(e.key==='Enter'){ runSchedPrompt(i.value); } });
+  const tc=document.getElementById('themeCode'); if(tc)tc.addEventListener('keydown',e=>{ if(e.key==='Enter'){ themeOpen=false; if(!importThemeCode(tc.value)){ themeOpen=true; render(); alert('Couldn’t read that theme code — paste the whole PEAK-THEME… string the creator gave you.'); } } }); }
 
 /* ============================================================
  * Chart
@@ -1122,32 +1165,33 @@ function sleepMarkers(){ const {bed,wake}=optimalSleep();
   const line=(t,col)=>{ const x=xOf(t); return '<line x1="'+x.toFixed(1)+'" y1="0" x2="'+x.toFixed(1)+'" y2="'+(CH-PADB)+'" stroke="'+col+'" stroke-width="1.2" stroke-dasharray="1 5" opacity=".6"/>'; };
   return line(bed,'#6EE7B7')+line(wake,'#FBBF24'); }
 function chartSvg(){
-  const defs='<defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#34D399" stop-opacity=".34"/><stop offset="100%" stop-color="#34D399" stop-opacity="0"/></linearGradient>'
+  const gc=graphColor(), gcShadow=toRGBA(gc,.7);   // energy-curve color follows the theme accent
+  const defs='<defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+gc+'" stop-opacity=".34"/><stop offset="100%" stop-color="'+gc+'" stop-opacity="0"/></linearGradient>'
     +'<linearGradient id="caf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FBBF24" stop-opacity=".4"/><stop offset="100%" stop-color="#FBBF24" stop-opacity=".02"/></linearGradient></defs>';
   let body='';
   if(chartType==='bars'){
     const n=24, bw=CW/n*0.62;
     for(let h=0;h<n;h++){ const v=energyAt(h+0.5).e; const x=xOf(h+0.5)-bw/2, y=yOf(v); const isNow=Math.floor(nowT())===h;
-      body+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(CH-PADB-y).toFixed(1)+'" rx="3" fill="'+(isNow?'#FBBF24':'#34D399')+'" opacity="'+(isNow?'.9':'.55')+'"/>'; }
+      body+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(CH-PADB-y).toFixed(1)+'" rx="3" fill="'+(isNow?'#FBBF24':gc)+'" opacity="'+(isNow?'.9':'.55')+'"/>'; }
   } else if(chartType==='stack'){
-    // base = your energy without caffeine (green); total line = with caffeine (amber).
+    // base = your energy without caffeine (theme color); total line = with caffeine (amber).
     // Caffeine can now go negative (the crash), so we just draw both lines + base area.
     const baseP=CURVE.map(p=>[xOf(p.t),yOf(p.base)]);
     const totP=CURVE.map(p=>[xOf(p.t),yOf(p.e)]);
     const baseLine=smoothPath(baseP);
     const totLine=smoothPath(totP);
     body+='<path d="'+baseLine+' L'+CW+' '+(CH-PADB)+' L0 '+(CH-PADB)+' Z" fill="url(#area)"/>';
-    body+='<path d="'+baseLine+'" fill="none" stroke="#34D399" stroke-width="2" stroke-dasharray="4 4" opacity=".8" style="filter:drop-shadow(0 0 3px rgba(52,211,153,.5))"/>';
+    body+='<path d="'+baseLine+'" fill="none" stroke="'+gc+'" stroke-width="2" stroke-dasharray="4 4" opacity=".8" style="filter:drop-shadow(0 0 3px '+toRGBA(gc,.5)+')"/>';
     body+='<path d="'+totLine+'" fill="none" stroke="#FBBF24" stroke-width="2.2" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(251,191,36,.6))"/>';
   } else {
     const pts=CURVE.map(p=>[xOf(p.t),yOf(p.e)]);
     const line=smoothPath(pts);
     body+='<path d="'+line+' L'+CW+' '+(CH-PADB)+' L0 '+(CH-PADB)+' Z" fill="url(#area)"/>';
-    body+='<path d="'+line+'" fill="none" stroke="#34D399" stroke-width="2.4" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(52,211,153,.75))"/>';
+    body+='<path d="'+line+'" fill="none" stroke="'+gc+'" stroke-width="2.4" stroke-linecap="round" style="filter:drop-shadow(0 0 5px '+gcShadow+')"/>';
   }
   // peak marker dot
   let pk='';
-  if(PEAK){ const px=xOf(PEAK.t),py=yOf(PEAK.e); pk='<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="4.5" fill="#0b110e" stroke="#34D399" stroke-width="2"/>'; }
+  if(PEAK){ const px=xOf(PEAK.t),py=yOf(PEAK.e); pk='<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="4.5" fill="#0b110e" stroke="'+gc+'" stroke-width="2"/>'; }
   return '<svg class="chartSvg" id="chartSvg" viewBox="0 0 '+CW+' '+CH+'" preserveAspectRatio="none">'+defs+gridLines()+taskBands()+armRectSvg()+sleepMarkers()+crashMarkers()+body+pk+'</svg>';
 }
 function crashMarkers(){ const cc=caffeineCrash(), mc=medCrash(); let s='';
@@ -1630,6 +1674,9 @@ function startPulse(dur){
 document.addEventListener('click',e=>{
   if(e.target.closest('#mSave')){ saveManual(); return; }
   if(e.target.closest('[data-addsched]')){ const i=document.getElementById('schInput'); if(i)runSchedPrompt(i.value); return; }
+  if(e.target.closest('[data-themeimport]')){ themeOpen=!themeOpen; render(); return; }
+  if(e.target.closest('[data-themereset]')){ resetTheme(); return; }
+  if(e.target.closest('[data-themeapply]')){ const i=document.getElementById('themeCode'); const code=i?i.value:''; themeOpen=false; if(!importThemeCode(code)){ themeOpen=true; render(); alert('Couldn’t read that theme code — paste the whole PEAK-THEME… string the creator gave you.'); } return; }
   const rs=e.target.closest('[data-rmsched]'); if(rs){ removeSched(rs.dataset.rmsched); return; }
   const gt=e.target.closest('[data-gaptask]'); if(gt){ regapTask(gt.dataset.gaptask); return; }
   const acp=e.target.closest('[data-armchip]'); if(acp){ schArmChip(acp.dataset.armchip); return; }
@@ -1672,6 +1719,7 @@ document.addEventListener('click',e=>{
   const pos=[[8,18,2],[16,52,3],[24,80,2],[33,28,4],[41,64,2],[50,12,3],[57,46,2],[64,86,3],[72,24,2],[80,58,4],[88,38,2],[94,74,3],[12,38,2],[46,90,2],[68,8,3],[86,16,2]];
   d.innerHTML=pos.map((p,i)=>'<i style="left:'+p[0]+'%;top:'+p[1]+'%;width:'+p[2]+'px;height:'+p[2]+'px;animation-delay:'+(i*0.45).toFixed(2)+'s;animation-duration:'+(5+(i%4))+'s"></i>').join(''); })();
 
+applyThemeBg();
 render();
 setInterval(()=>{ if(health())render(); }, 60000);
 setInterval(tickCountdowns, 1000); // live countdowns (now-running / free / bedtime)
