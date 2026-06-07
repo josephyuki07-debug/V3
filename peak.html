@@ -1847,6 +1847,7 @@ document.addEventListener('click',e=>{
   const aw=e.target.closest('[data-addworkout]'); if(aw){ workoutOpen=false; addWorkout(parseFloat(aw.dataset.addworkout)); return; }
   if(e.target.closest('[data-plantoggle]')){ planOpen=!planOpen; render(); return; }
   if(e.target.closest('[data-planadd]')){ const el=document.getElementById('schInput'); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.focus(); } return; }
+  if(e.target.closest('[data-addsleep]')){ pickSource('manual'); setTimeout(()=>{ const el=document.querySelector('.manualCard'); if(el)el.scrollIntoView({behavior:'smooth',block:'center'}); },120); return; }
   const pb=e.target.closest('[data-pulse]'); if(pb){ startPulse(parseInt(pb.dataset.pulse,10)||30); return; }
   const rm=e.target.closest('[data-rmcaf]'); if(rm){ removeCaffLog(rm.dataset.rmcaf); return; }
   const cc=e.target.closest('[data-clearcaf]'); if(cc){ if(confirm('Clear all of today’s caffeine?')) clearCaffToday(); return; }
