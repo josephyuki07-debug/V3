@@ -1653,8 +1653,8 @@ function render(){
   // Re-rendered every 60s (see the interval at the bottom) so it tracks the curve through the day.
   const nowE=Math.round(energyAt(nowT()).e); const nt=toneOf(nowE); const c1=2*Math.PI*30;
   const topScore='<div class="card topScore"><div class="tsRing" style="--ringc:'+nt.c+'"><div class="glow"></div>'
-    +'<svg viewBox="0 0 72 72"><circle class="tr" cx="36" cy="36" r="30"/>'
-    +'<circle class="fl" id="tsFill" cx="36" cy="36" r="30" style="stroke-dasharray:'+c1+';stroke-dashoffset:'+(c1*(1-nowE/100))+'"/></svg>'
+    +'<svg viewBox="0 0 72 72"><defs><linearGradient id="tsGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="'+nt.c+'"/><stop offset="100%" stop-color="color-mix(in srgb,'+nt.c+' 45%,#ffffff)"/></linearGradient></defs><circle class="tr" cx="36" cy="36" r="30"/>'
+    +'<circle class="fl" id="tsFill" cx="36" cy="36" r="30" style="stroke:url(#tsGrad);stroke-dasharray:'+c1+';stroke-dashoffset:'+(c1*(1-nowE/100))+'"/></svg>'
     +'<div class="tsNum" id="tsNum">'+nowE+'</div></div>'
     +'<div class="tsMeta"><div class="tsWord">'+nt.word+'</div><div class="tsCap">Peak now · '+clockOf(nowT())+'</div></div></div>';
 
@@ -1957,7 +1957,6 @@ setInterval(tickCountdowns, 1000); // live countdowns (now-running / free / bedt
 }catch(e){} })();
 </script>
 <script>
-/* brand.js (inlined for standalone) */
 /* ============================================================
  * brand.js — the suite wordmark = the CURRENT USER'S name.
  *
