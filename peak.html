@@ -737,14 +737,14 @@ function diffOf(s){ if(/\b(hard|intense|deep|heavy|max|pr|grind)\b/i.test(s))ret
  * the Lab's "Send to Peak" button writes — so you can re-style without a
  * redeploy. The Lab's config object maps 1:1 onto these keys.
  * -------------------------------------------------------------------- */
-const SCHED_STYLE_DEFAULT={ fill:'grad', op:0.26, rad:10, colorMode:'task', acc:'#6EE7B7', pill:'glass', pos:'mid', bd:false, icon:true, dur:true, now:true, valcol:false, diff:{ easy:'#F59E0B', med:'#F59E0B', hard:'#EC4899' } };
+const SCHED_STYLE_DEFAULT={ fill:'grad', op:0.18, rad:10, colorMode:'auto', acc:'#6EE7B7', pill:'glass', pos:'top', bd:true, icon:true, dur:true, now:true, valcol:false, diff:{ easy:'#6EE7B7', med:'#F59E0B', hard:'#FF50A6' } };
 function schedStyle(){ const o=readLS('peak_sched_style_v1'); const s=Object.assign({},SCHED_STYLE_DEFAULT,(o&&typeof o==='object')?o:{}); s.diff=Object.assign({},SCHED_STYLE_DEFAULT.diff,(o&&o.diff)||{}); return s; }
 function hex2rgb(h){ h=String(h||'').replace('#',''); if(h.length===3)h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); return isFinite(n)?[(n>>16)&255,(n>>8)&255,n&255]:[110,231,183]; }
 function toRGBA(css,a){ let c; if(typeof css==='string'&&css[0]==='#')c=hex2rgb(css); else { const m=String(css).match(/\d+/g); c=m?[+m[0],+m[1],+m[2]]:[110,231,183]; } return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')'; }
 function diffColor(d){ const c=schedStyle().diff; return c[d]||c.med; }
 function segColor(t,i){ const s=schedStyle();
   if(s.colorMode==='accent')return s.acc;
-  if(s.colorMode==='auto'){ const pal=['#6EE7B7','#F59E0B','#EC4899','#22D3EE','#A78BFA','#34D399','#FBBF24']; return pal[(i||0)%pal.length]; }
+  if(s.colorMode==='auto'){ const pal=['#6EE7B7','#F59E0B','#EC4899','#22D3EE','#A78BFA','#FB7185','#FBBF24','#34D399','#60A5FA','#F472B6']; return pal[(i||0)%pal.length]; }
   if(s.colorMode==='value'||s.colorMode==='readiness'){ const A=hex2rgb('#EF4444'),B=hex2rgb('#6EE7B7'),k=clamp(energyAt((t.start+t.end)/2).e/100,0,1); return 'rgb('+[0,1,2].map(j=>Math.round(A[j]+(B[j]-A[j])*k)).join(',')+')'; }
   return diffColor(t.diff); }
 function pClock(h,m,ap){ h=+h; m=m?+m:0; if(ap){ ap=ap.toLowerCase(); if(ap[0]==='p'&&h<12)h+=12; if(ap[0]==='a'&&h===12)h=0; } return h+m/60; }
