@@ -194,6 +194,9 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
 .dragTime{ position:absolute; bottom:34px; transform:translateX(-50%); display:none; background:var(--panel2); border:1px solid var(--accent2); border-radius:8px; padding:5px 11px; font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent2); white-space:nowrap; pointer-events:none; z-index:7; box-shadow:0 4px 14px rgba(0,0,0,.55); }
 .sleepMarks{ position:absolute; top:0; left:0; right:0; height:0; pointer-events:none; }
 .sleepMark{ position:absolute; top:-6px; transform:translateX(-50%); font-family:var(--mono); font-size:9px; letter-spacing:.04em; color:var(--muted2); white-space:nowrap; background:var(--panel2); border:1px solid var(--line2); border-radius:7px; padding:3px 8px; }
+.sleepLabels{ position:absolute; inset:0; pointer-events:none; z-index:2; }
+.sleepLbl{ position:absolute; top:8px; transform:translateX(-50%); font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:rgba(110,231,183,.6); white-space:nowrap; }
+.sleepLbl.wake{ color:var(--muted2); }
 /* live "now" marker on the graph (ported from Schedule Lab): value bubble + dot + line, plus the bedtime moon */
 .nowline{ position:absolute; top:0; bottom:18px; width:1px; background:rgba(255,255,255,.4); pointer-events:none; z-index:4; }
 .nowdot{ position:absolute; width:13px; height:13px; border-radius:50%; background:#fff; border:2px solid var(--accent2); box-shadow:0 0 14px var(--accent2); transform:translate(-50%,-50%); pointer-events:none; z-index:5; }
@@ -758,6 +761,9 @@ function parseHM(s){ if(!s)return null; const m=String(s).match(/(\d{1,2}):(\d{2
 function wakeBed(){ const h=health(); let wake=parseHM(h&&h.wakeTime), bed=parseHM(h&&h.bedtime);
   if(wake==null||bed==null){ const hw=histWakeBed(); if(wake==null)wake=hw.wake; if(bed==null)bed=hw.bed; } // your real chronotype
   if(wake==null)wake=7; if(bed==null)bed=23; return {wake,bed}; }
+/* do we have a REAL wake/bed time from vitals (manual / Apple) or your history?
+ * Whoop gives sleep duration but not a wake clock-time, so that alone isn't enough. */
+function hasWakeBedData(){ const h=health(); if(h&&(h.wakeTime||h.bedtime))return true; const hw=histWakeBed(); return hw.wake!=null||hw.bed!=null; }
 function clockOf(t){ t=((t%24)+24)%24; let hh=Math.floor(t); const mm=Math.round((t-hh)*60); let m2=mm; if(m2===60){hh+=1;m2=0;} const ap=hh<12?'AM':'PM'; let h12=hh%12; if(h12===0)h12=12; return h12+(m2?':'+String(m2).padStart(2,'0'):'')+' '+ap; }
 function nowT(){ const d=new Date(); return d.getHours()+d.getMinutes()/60; }
 function tToMs(t){ const d=new Date(); d.setHours(0,0,0,0); return d.getTime()+t*3600000; }
@@ -989,7 +995,10 @@ function parseTask(str){
   }
   let start=null,end=null,durH=null,explicit=false;
   let m=s.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|till|until|[-–—])\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-  if(m){ start=pClock(m[1],m[2],m[3]); end=pClock(m[4],m[5],m[6]||m[3]); if(end<=start)end=(end+12<=24)?end+12:start+1; s=s.replace(m[0],' '); explicit=true; durH=end-start; }
+  if(m){ const noAP=!m[3]&&!m[6];   // bare range like "10-2" → daytime: 10am→2pm, never 10pm→2am
+    start=pClock(m[1],m[2],m[3]); end=pClock(m[4],m[5],m[6]||m[3]);
+    if(noAP && start>=1 && start<=5) start+=12;   // "1-3" → 1pm–3pm (nobody schedules 1am); "8-2"/"10-2" stay morning starts
+    if(end<=start)end=(end+12<=24)?end+12:start+1; s=s.replace(m[0],' '); explicit=true; durH=end-start; }
   else {
     let comp=s.match(/\b([01]?\d|2[0-3])([0-5]\d)\b/), one=s.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i), dur=s.match(/\b(\d+(?:\.\d+)?)\s*(h|hrs?|hours?|m|mins?|minutes?|minuets?)\b/i);
     if(one){ start=pClock(one[1],one[2],one[3]); s=s.replace(one[0],' '); explicit=true; }
@@ -1095,12 +1104,15 @@ function placeInWindow(p,lo,hi,list){ const others=list.filter(x=>x&&!x.gap&&x.s
   const dur=Math.max(0.25,Math.min(taskDur(p),hi-lo));
   let st=bestStartIn(lo,hi,dur,p.diff,others); if(st==null)st=snapFree(lo,dur,others);
   p.start=st; p.end=Math.min(24,st+dur); p.durH=p.end-p.start; p.explicit=true; return p; }
-function addSched(str, win){ if(!str||!str.trim())return; schErr=''; const tasks=loadSched(); const p=parseTask(str); if(!p){ saveSched(tasks); return; }
-    if(p.gap){ if(win){ p.rStart=win[0]; p.rEnd=win[1]; } tasks.push(p); }
-    else if(win){ placeInWindow(p, win[0], win[1], tasks.filter(x=>!x.gap)); tasks.push(p); }
-    else if(!p.explicit||p.start==null){ placeTask(p,tasks.filter(x=>!x.gap)); tasks.push(p); }   // intensity -> energy level
-    else { p.start=((p.start%24)+24)%24; p.end=Math.max(p.start+0.25,Math.min(24,p.end)); tasks.push(p); }
-  tasks.sort((a,b)=>(a.start==null?99:a.start)-(b.start==null?99:b.start)); saveSched(tasks); }
+function addSched(str, win){ if(!str||!str.trim())return; schErr=''; const tasks=loadSched(); let added=0;
+  // EVERY task must specify a time — no auto-placement, no gap-fills.
+  str.split(/,|;|\band\b/i).forEach(pStr=>{ if(!pStr.trim())return; const p=parseTask(pStr); if(!p)return;
+    if(win){ placeInWindow(p, win[0], win[1], tasks.filter(x=>!x.gap)); tasks.push(p); added++; return; } // a clicked window IS the time
+    if(p.gap || !p.explicit || p.start==null){ schErr='Add a time — e.g. “school 10-2”, “gym 1930 hard”, “study 3-5”.'; return; }
+    p.start=((p.start%24)+24)%24; p.end=Math.max(p.start+0.25,Math.min(24,p.end)); tasks.push(p); added++;
+  });
+  if(added) tasks.sort((a,b)=>(a.start==null?99:a.start)-(b.start==null?99:b.start));
+  saveSched(tasks); }
 function regapTask(id){ const tasks=loadSched(); const t=tasks.find(x=>x.id===id); if(!t||t.gap)return; placeTask(t,tasks.filter(x=>!x.gap&&x.id!==id)); saveSched(tasks); }
 /* workout suggestion from gym history */
 function gymDaysLast7(){ const d=readLS('po_coach_workout_done')||{}; let n=0; for(let i=0;i<7;i++){ const dd=new Date(); dd.setDate(dd.getDate()-i); if(d[dayKey(dd)])n++; } return n; }
@@ -1239,9 +1251,8 @@ function scheduleHtml(){
     +(themeOpen?'<div class="schThemeRow"><textarea id="themeCode" class="schThemeIn" placeholder="Paste a theme or graph code…" rows="2" autocomplete="off"></textarea><button class="schThemeApply" data-themeapply="1">Apply</button></div>'
       +'<div class="schThemeHint">Paste a Schedule Lab <b>theme code</b> (color, background, cards) or a Graph Lab <b>graph code</b> (bars, stepped, dotted, glow)'+(_hasTheme?' <button class="schThemeReset" data-themereset="1">· reset to default</button>':'')+'</div>':'')
     +'</div>';
-  const input='<div class="schInputRow"><input id="schInput" class="schInput" placeholder="e.g. Focused work, 1h, high" autocomplete="off"><button class="schAdd" data-addsched="1">＋ Add</button></div><div class="schHint">type: name, length, intensity — e.g. "Focused work, 1h, high" · high=peak energy · mid=average · low=quiet hour · drag to move · “big gap claude” fills your whole free day · “small gap homework” fills only the short windows between tasks · gaps never touch sleep · easy/medium/hard = color <span style="opacity:.6">· build '+SCHED_SEED+'</span></div>'+themeBlock;
-  // workout nudge: you've trained recently but not today
-  const wOut = (!gymLoggedToday() && gymDaysLast7()>=1) ? '<div class="schWorkout"><button class="schWoBtn" data-workout="1">🏋️ You’ve been training — work out today?</button>'+(workoutOpen?'<div class="schWoOpts">'+[['45m',0.75],['1h',1],['1h 30m',1.5],['2h',2]].map(o=>'<button class="schWoOpt" data-addworkout="'+o[1]+'">'+o[0]+'</button>').join('')+'</div>':'')+'</div>' : '';
+  const input='<div class="schInputRow"><input id="schInput" class="schInput" placeholder="e.g. school 10-2, gym 1930 hard" autocomplete="off"><button class="schAdd" data-addsched="1">＋ Add</button></div><div class="schHint">give every task a time — e.g. <b>school 10-2</b> · <b>gym 1930 hard</b> · <b>claude 9-11</b>. “10-2” means 10am–2pm. easy/medium/hard = color · drag a pill to move it <span style="opacity:.6">· build '+SCHED_SEED+'</span></div>'+themeBlock;
+  const wOut = '';   // no auto-add workout nudge — every task is typed with a time
   const row = tasks.length ? '<div class="schRow">'+tasks.map(t=>{ const time = t.gap ? (t.rStart!=null?clockOf(t.rStart)+'–'+clockOf(t.rEnd):(t.size==='small'?'small gaps':'fills day')) : clockOf(t.start);
       const armed=(!t.gap && schSel.indexOf(t.id)>=0)?' sel':''; const armAttr=t.gap?'':' data-armchip="'+t.id+'"';
       return '<span class="schChip'+(t.gap?' gapChip':'')+armed+'"'+armAttr+' style="--dc:'+diffColor(t.diff)+'"><b>'+esc(t.label)+'</b><span class="schChipTime">'+time+'</span>'+(!t.gap&&!t.explicit?'<span class="schGap" data-gaptask="'+t.id+'" title="Re-slot to best free time">↻</span>':'')+'<span class="schX" data-rmsched="'+t.id+'">×</span></span>'; }).join('')+'</div>' : '';
@@ -1293,9 +1304,19 @@ function stepPath(pts){ if(!pts.length)return ''; let d='M'+pts[0][0].toFixed(1)
   for(let i=1;i<pts.length;i++){ d+=' L'+pts[i][0].toFixed(1)+' '+pts[i-1][1].toFixed(1)+' L'+pts[i][0].toFixed(1)+' '+pts[i][1].toFixed(1); } return d; }
 function gridLines(){ let g=''; for(let i=1;i<=3;i++){ const y=PADT+(i/4)*(CH-PADT-PADB); g+='<line x1="0" y1="'+y.toFixed(1)+'" x2="'+CW+'" y2="'+y.toFixed(1)+'" stroke="rgba(255,255,255,.05)" stroke-dasharray="2 5"/>'; } return g; }
 function nowMarker(){ const t=nowT(); const x=xOf(t); return '<line x1="'+x.toFixed(1)+'" y1="0" x2="'+x.toFixed(1)+'" y2="'+(CH-PADB)+'" stroke="rgba(255,255,255,.18)" stroke-dasharray="3 4"/>'; }
+/* sleep window as a transparent, dashed-bordered ZONE — "you should be asleep here".
+ * It wraps midnight, so it's two bands: 12A→wake and bed→12A. */
 function sleepMarkers(){ const {bed,wake}=optimalSleep();
-  const line=(t,col)=>{ const x=xOf(t); return '<line x1="'+x.toFixed(1)+'" y1="0" x2="'+x.toFixed(1)+'" y2="'+(CH-PADB)+'" stroke="'+col+'" stroke-width="1.2" stroke-dasharray="1 5" opacity=".6"/>'; };
-  return line(bed,'#6EE7B7'); }
+  const zone=(a,b)=>{ if(b<=a+0.05)return ''; const X=xOf(a), W=xOf(b)-xOf(a);
+    return '<rect x="'+X.toFixed(1)+'" y="0" width="'+W.toFixed(1)+'" height="'+(CH-PADB)+'" fill="rgba(110,231,183,.045)" stroke="rgba(110,231,183,.4)" stroke-width="1.2" stroke-dasharray="5 5" rx="4"/>'; };
+  return zone(0,wake)+zone(bed,24); }
+/* "sleep here / wake here" labels sitting on the sleep-zone edges */
+function sleepLabelsHtml(){ const {bed,wake}=optimalSleep();
+  let h=''; const nightC=clamp((bed+24)/2/24*100,7,93);
+  h+='<div class="sleepLbl" style="left:'+nightC.toFixed(1)+'%">☾ sleep</div>';
+  if(wake>1) h+='<div class="sleepLbl" style="left:'+clamp(wake/2/24*100,5,95).toFixed(1)+'%">☾ sleep</div>';
+  h+='<div class="sleepLbl wake" style="left:'+clamp(wake/24*100,4,96).toFixed(1)+'%">☀ wake '+clockOf(wake)+'</div>';
+  return h; }
 function chartSvg(){
   const G=graphStyle();                              // imported Graph Lab design (or shipped default)
   const gc=G.color, lw=G.line;
@@ -1602,7 +1623,9 @@ function render(){
     +'<circle class="fl" id="peakFill" cx="42" cy="42" r="38" style="stroke-dasharray:'+c2+';stroke-dashoffset:'+(c2*(1-PEAK.e/100))+'"/></svg>'
     +'<div class="peakNum" id="peakNum">'+Math.round(PEAK.e)+'</div></div>';
   const sp=optimalSleep();
-  const sleepPlan='<div class="sleepPlan"><span class="spItem">🌙 Bed <b>'+clockOf(sp.bed)+'</b></span><span class="spDot">·</span><span class="spItem">☀️ Wake <b>'+clockOf(sp.wake)+'</b></span><span class="spNote"><b class="cdVal" data-countdown="'+bedCountdownMs()+'" style="color:var(--accent2)"></b> to bed · '+sp.need+'h target</span></div>';
+  const sleepPlan = hasWakeBedData()
+    ? '<div class="sleepPlan"><span class="spItem">🌙 Bed <b>'+clockOf(sp.bed)+'</b></span><span class="spDot">·</span><span class="spItem">☀️ Wake <b>'+clockOf(sp.wake)+'</b></span><span class="spNote"><b class="cdVal" data-countdown="'+bedCountdownMs()+'" style="color:var(--accent2)"></b> to bed · '+sp.need+'h target</span></div>'
+    : '<div class="sleepPlan" data-addsleep="1" style="cursor:pointer;border-color:rgba(245,158,11,.4)"><span class="spItem" style="color:var(--warn)">⚠ Add your wake &amp; sleep time</span><span class="spNote">tap — set it in your check-in so we can plan your day &amp; sleep window</span></div>';
   const cc=caffeineCrash(), mc=medCrash();
   let crashLabels='';
   if(cc) crashLabels+='<div class="crashMark" style="left:'+clamp(cc.t/24*100,6,94)+'%">☕ crash '+clockOf(cc.t)+'</div>';
@@ -1613,7 +1636,7 @@ function render(){
     +'<div class="seg">'+['line','bars','stack'].map(t=>'<button class="segBtn '+(chartType===t?'on':'')+'" data-chart="'+t+'">'+t+'</button>').join('')+'</div></div>'
     + feelBarHtml()
     +'<div class="chartWrap" id="chartWrap">'+chartBackdropHtml()+chartSvg()
-    +''
+    +'<div class="sleepLabels">'+sleepLabelsHtml()+'</div>'
     +'<div class="schBands" id="schBands">'+schOverlayHtml()+'</div>'
     +'<div class="crashMarks">'+crashLabels+'</div>'
     +'<div class="scrubLine" id="scrubLine"></div><div class="scrubDot" id="scrubDot"></div><div class="scrubTip" id="scrubTip"></div><div class="dragTime" id="dragTime"></div></div>'
@@ -1822,6 +1845,7 @@ document.addEventListener('click',e=>{
   const aw=e.target.closest('[data-addworkout]'); if(aw){ workoutOpen=false; addWorkout(parseFloat(aw.dataset.addworkout)); return; }
   if(e.target.closest('[data-plantoggle]')){ planOpen=!planOpen; render(); return; }
   if(e.target.closest('[data-planadd]')){ const el=document.getElementById('schInput'); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.focus(); } return; }
+  if(e.target.closest('[data-addsleep]')){ pickSource('manual'); setTimeout(()=>{ const el=document.querySelector('.manualCard'); if(el)el.scrollIntoView({behavior:'smooth',block:'center'}); },120); return; }
   const pb=e.target.closest('[data-pulse]'); if(pb){ startPulse(parseInt(pb.dataset.pulse,10)||30); return; }
   const rm=e.target.closest('[data-rmcaf]'); if(rm){ removeCaffLog(rm.dataset.rmcaf); return; }
   const cc=e.target.closest('[data-clearcaf]'); if(cc){ if(confirm('Clear all of today’s caffeine?')) clearCaffToday(); return; }
