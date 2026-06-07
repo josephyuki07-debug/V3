@@ -827,21 +827,39 @@ try{ localStorage.removeItem('peak_sched_style_v1'); }catch(e){}
  * theme (peak_theme_v1) is an explicit, user-chosen OVERRIDE that wins until
  * they reset. (Different from the old auto Send-to-Peak key we still nuke.) */
 const PEAK_THEME='peak_theme_v1';
-function loadTheme(){ try{ const t=JSON.parse(localStorage.getItem(PEAK_THEME)||'null'); return (t&&(t.style||t.bg))?t:null; }catch(e){ return null; } }
+function loadTheme(){ try{ const t=JSON.parse(localStorage.getItem(PEAK_THEME)||'null'); return (t&&(t.style||t.bg||t.graph))?t:null; }catch(e){ return null; } }
+/* the energy-curve look — defaults to the shipped "stepped area" design; a pasted
+ * Graph Lab code (lab:'graph') overrides any of: color, line, glow, variant, height-color. */
+function graphStyle(){ const t=loadTheme(); const g=(t&&t.graph)||{};
+  return { color:(typeof g.color==='string'&&g.color)?g.color:'#E9EFE9', line:(g.line!=null?+g.line:3), glow:(g.glow!==false), variant:String(g.variant||'stepped area').toLowerCase(), heightColor:(g.heightColor!=null?!!g.heightColor:true), hiC:g.hiC||'#6EE7B7', loC:g.loC||'#EF4444' }; }
 function schedStyle(){ const t=loadTheme(); const s=Object.assign({},SCHED_STYLE_DEFAULT,(t&&t.style)||{}); s.diff=Object.assign({},SCHED_STYLE_DEFAULT.diff,(t&&t.style&&t.style.diff)||{}); return s; }
 function graphColor(){ const c=schedStyle().acc; return (typeof c==='string'&&c)?c:'#34D399'; }   // the energy-curve line/area/dot color = the theme accent
 function applyThemeBg(){ const t=loadTheme(); const r=document.documentElement; if(t&&t.bg){ r.style.setProperty('--bg',t.bg); } else { r.style.removeProperty('--bg'); } }
 /* PEAK-THEME:<base64 json> → {style, bg, tasks?}. Returns true on success. */
+function normGraph(c){ return { color:c.color||null, line:(c.line!=null?+c.line:null), glow:(c.glow!==false), variant:c.variant||c.animate||'line', heightColor:!!c.heightColor, hiC:c.hiC||null, loC:c.loC||null }; }
 function importThemeCode(code){ try{
-    let s=String(code||'').trim().replace(/^PEAK-?THEME:?/i,'').trim(); if(!s)return false;
-    const cfg=JSON.parse(decodeURIComponent(escape(atob(s))));
-    if(!cfg||(!cfg.style&&!cfg.bg&&!cfg.tasks))return false;
-    localStorage.setItem(PEAK_THEME, JSON.stringify({v:1, style:cfg.style||{}, bg:cfg.bg||null}));
-    if(Array.isArray(cfg.tasks)&&cfg.tasks.length && confirm('Also replace your schedule with the creator’s tasks?')){
-      const tasks=cfg.tasks.map(t=>({ id:t.id||('k_'+Math.random().toString(36).slice(2,8)), label:t.label||t.name||'Task', start:t.start, end:t.end, durH:t.durH||((t.end!=null&&t.start!=null)?t.end-t.start:1), color:t.color, icon:t.icon, diff:t.diff||'med', locked:(t.locked!=null?!!t.locked:!!t.explicit), explicit:(t.explicit!=null?!!t.explicit:(t.start!=null)), gap:!!t.gap, size:t.size, rStart:(t.rStart!=null?t.rStart:null), rEnd:(t.rEnd!=null?t.rEnd:null) }));
-      saveSched(tasks);
+    let raw=String(code||'').trim(); if(!raw)return false;
+    // 1) Schedule Lab theme (base64): graph color + background + card style + tasks
+    if(/^PEAK-?THEME:/i.test(raw)){
+      const cfg=JSON.parse(decodeURIComponent(escape(atob(raw.replace(/^PEAK-?THEME:?/i,'').trim()))));
+      if(!cfg||(!cfg.style&&!cfg.bg&&!cfg.tasks))return false;
+      const t=loadTheme()||{v:1}; t.style=cfg.style||{}; t.bg=cfg.bg||null; localStorage.setItem(PEAK_THEME, JSON.stringify(t));
+      if(Array.isArray(cfg.tasks)&&cfg.tasks.length && confirm('Also replace your schedule with the creator’s tasks?')){
+        const tasks=cfg.tasks.map(t2=>({ id:t2.id||('k_'+Math.random().toString(36).slice(2,8)), label:t2.label||t2.name||'Task', start:t2.start, end:t2.end, durH:t2.durH||((t2.end!=null&&t2.start!=null)?t2.end-t2.start:1), color:t2.color, icon:t2.icon, diff:t2.diff||'med', locked:(t2.locked!=null?!!t2.locked:!!t2.explicit), explicit:(t2.explicit!=null?!!t2.explicit:(t2.start!=null)), gap:!!t2.gap, size:t2.size, rStart:(t2.rStart!=null?t2.rStart:null), rEnd:(t2.rEnd!=null?t2.rEnd:null) }));
+        saveSched(tasks);
+      }
+      applyThemeBg(); render(); return true;
     }
-    applyThemeBg(); render(); return true;
+    // 2) Graph Lab / Text Lab code: a JSON object (optionally after a plain-English line)
+    const m=raw.match(/\{[\s\S]*\}/);
+    if(m){ const cfg=JSON.parse(m[0]);
+      if(cfg&&cfg.lab==='graph'){ const t=loadTheme()||{v:1}; t.graph=normGraph(cfg);
+        const v=String(cfg.variant||cfg.animate||'').toLowerCase(); chartType=/bars?/.test(v)?'bars':(/stack/.test(v)?'stack':'line');
+        localStorage.setItem(PEAK_THEME, JSON.stringify(t)); render(); return true; }
+      if(cfg&&cfg.lab==='text'){ alert('That’s a Text Lab design (title animations) — it doesn’t style the energy graph.'); return false; }
+      if(cfg&&(cfg.style||cfg.bg)){ const t=loadTheme()||{v:1}; if(cfg.style)t.style=cfg.style; if(cfg.bg!=null)t.bg=cfg.bg; localStorage.setItem(PEAK_THEME, JSON.stringify(t)); applyThemeBg(); render(); return true; }
+    }
+    return false;
   }catch(e){ return false; } }
 function resetTheme(){ try{ localStorage.removeItem(PEAK_THEME); }catch(e){} document.documentElement.style.removeProperty('--bg'); render(); }
 let themeOpen=false;
@@ -1107,8 +1125,8 @@ function scheduleHtml(){
   const _hasTheme=!!loadTheme();
   const themeBlock='<div class="schTheme">'
     +'<button class="schThemeToggle'+(themeOpen?' on':'')+(_hasTheme?' active':'')+'" data-themeimport="1">🎨 '+(_hasTheme?'Creator theme active':'Import a creator theme')+'</button>'
-    +(themeOpen?'<div class="schThemeRow"><input id="themeCode" class="schThemeIn" placeholder="Paste a PEAK-THEME… code" autocomplete="off"><button class="schThemeApply" data-themeapply="1">Apply</button></div>'
-      +'<div class="schThemeHint">A creator shares a code; pasting it sets the graph color, background &amp; card style'+(_hasTheme?' <button class="schThemeReset" data-themereset="1">· reset to default</button>':'')+'</div>':'')
+    +(themeOpen?'<div class="schThemeRow"><input id="themeCode" class="schThemeIn" placeholder="Paste a theme or graph code…" autocomplete="off"><button class="schThemeApply" data-themeapply="1">Apply</button></div>'
+      +'<div class="schThemeHint">Paste a Schedule Lab <b>theme code</b> (color, background, cards) or a Graph Lab <b>graph code</b> (bars, stepped, dotted, glow)'+(_hasTheme?' <button class="schThemeReset" data-themereset="1">· reset to default</button>':'')+'</div>':'')
     +'</div>';
   const input='<div class="schInputRow"><input id="schInput" class="schInput" placeholder="e.g. school 8-2, gym 1930 hard, gap claude" autocomplete="off"><button class="schAdd" data-addsched="1">＋ Add</button></div><div class="schHint">fixed task = give a time (9-11) · “big gap claude” fills your whole free day · “small gap homework” fills only the short windows between tasks · gaps never touch sleep · easy/medium/hard = color <span style="opacity:.6">· build '+SCHED_SEED+'</span></div>'+themeBlock;
   // workout nudge: you've trained recently but not today
@@ -1168,36 +1186,37 @@ function sleepMarkers(){ const {bed,wake}=optimalSleep();
   const line=(t,col)=>{ const x=xOf(t); return '<line x1="'+x.toFixed(1)+'" y1="0" x2="'+x.toFixed(1)+'" y2="'+(CH-PADB)+'" stroke="'+col+'" stroke-width="1.2" stroke-dasharray="1 5" opacity=".6"/>'; };
   return line(bed,'#6EE7B7')+line(wake,'#FBBF24'); }
 function chartSvg(){
-  const gc=graphColor(), gcShadow=toRGBA(gc,.7);   // energy-curve color follows the theme accent
+  const G=graphStyle();                              // imported Graph Lab design (or shipped default)
+  const gc=G.color, lw=G.line;
+  const glowS=G.glow?(' style="filter:drop-shadow(0 0 6px '+toRGBA(gc,.85)+')"'):'';
+  const stepped=/step/.test(G.variant), dotted=/dot|dash/.test(G.variant), noArea=/line only|sparkline/.test(G.variant);
+  const areaFill=G.heightColor?'url(#hgrad)':'url(#area)';
   const defs='<defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+gc+'" stop-opacity=".34"/><stop offset="100%" stop-color="'+gc+'" stop-opacity="0"/></linearGradient>'
     +'<linearGradient id="caf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FBBF24" stop-opacity=".4"/><stop offset="100%" stop-color="#FBBF24" stop-opacity=".02"/></linearGradient>'
-    +'<linearGradient id="hgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6EE7B7" stop-opacity=".55"/><stop offset="55%" stop-color="#C8A24B" stop-opacity=".22"/><stop offset="100%" stop-color="#EF4444" stop-opacity=".16"/></linearGradient></defs>';
+    +'<linearGradient id="hgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+G.hiC+'" stop-opacity=".55"/><stop offset="55%" stop-color="#C8A24B" stop-opacity=".2"/><stop offset="100%" stop-color="'+G.loC+'" stop-opacity=".16"/></linearGradient></defs>';
   let body='';
   if(chartType==='bars'){
     const n=24, bw=CW/n*0.62;
     for(let h=0;h<n;h++){ const v=energyAt(h+0.5).e; const x=xOf(h+0.5)-bw/2, y=yOf(v); const isNow=Math.floor(nowT())===h;
       body+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(CH-PADB-y).toFixed(1)+'" rx="3" fill="'+(isNow?'#FBBF24':gc)+'" opacity="'+(isNow?'.9':'.55')+'"/>'; }
   } else if(chartType==='stack'){
-    // base = your energy without caffeine (theme color); total line = with caffeine (amber).
-    // Caffeine can now go negative (the crash), so we just draw both lines + base area.
+    // base = your energy without caffeine; total line = with caffeine (amber).
     const baseP=CURVE.map(p=>[xOf(p.t),yOf(p.base)]);
     const totP=CURVE.map(p=>[xOf(p.t),yOf(p.e)]);
-    const baseLine=smoothPath(baseP);
-    const totLine=smoothPath(totP);
+    const baseLine=smoothPath(baseP), totLine=smoothPath(totP);
     body+='<path d="'+baseLine+' L'+CW+' '+(CH-PADB)+' L0 '+(CH-PADB)+' Z" fill="url(#area)"/>';
     body+='<path d="'+baseLine+'" fill="none" stroke="'+gc+'" stroke-width="2" stroke-dasharray="4 4" opacity=".8" style="filter:drop-shadow(0 0 3px '+toRGBA(gc,.5)+')"/>';
     body+='<path d="'+totLine+'" fill="none" stroke="#FBBF24" stroke-width="2.2" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(251,191,36,.6))"/>';
   } else {
-    // Graph Lab "04 · stepped area": white glowing line over a height→color fill
-    // (green at high readiness, red at low). Stepped instead of smooth.
+    // LINE view — color/width/glow/stepped/dotted/height-color all from the graph style
     const pts=CURVE.map(p=>[xOf(p.t),yOf(p.e)]);
-    const step=stepPath(pts);
-    body+='<path d="'+step+' L'+CW+' '+(CH-PADB)+' L0 '+(CH-PADB)+' Z" fill="url(#hgrad)"/>';
-    body+='<path d="'+step+'" fill="none" stroke="#E9EFE9" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 6px rgba(233,239,233,.85))"/>';
+    const dpath=stepped?stepPath(pts):smoothPath(pts);
+    if(!noArea) body+='<path d="'+dpath+' L'+CW+' '+(CH-PADB)+' L0 '+(CH-PADB)+' Z" fill="'+areaFill+'"/>';
+    body+='<path d="'+dpath+'" fill="none" stroke="'+gc+'" stroke-width="'+lw+'" '+(dotted?'stroke-dasharray="1 9" ':'')+'stroke-linejoin="round" stroke-linecap="round"'+glowS+'/>';
   }
   // peak marker dot
   let pk='';
-  if(PEAK){ const px=xOf(PEAK.t),py=yOf(PEAK.e); const dotC=(chartType==='line')?'#E9EFE9':gc; pk='<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="4.5" fill="#0b110e" stroke="'+dotC+'" stroke-width="2"/>'; }
+  if(PEAK){ const px=xOf(PEAK.t),py=yOf(PEAK.e); pk='<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="4.5" fill="#0b110e" stroke="'+gc+'" stroke-width="2"/>'; }
   return '<svg class="chartSvg" id="chartSvg" viewBox="0 0 '+CW+' '+CH+'" preserveAspectRatio="none">'+defs+gridLines()+taskBands()+armRectSvg()+sleepMarkers()+crashMarkers()+body+pk+'</svg>';
 }
 function crashMarkers(){ const cc=caffeineCrash(), mc=medCrash(); let s='';
