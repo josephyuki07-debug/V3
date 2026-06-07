@@ -118,6 +118,17 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
 .bigNum{ font-family:var(--serif); font-style:italic; font-weight:600; font-size:64px; line-height:1; color:var(--fg); }
 .bigWord{ font-family:var(--serif); font-style:italic; font-size:18px; color:var(--accent2); margin-top:2px; }
 .bigCap{ font-family:var(--mono); font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-top:8px; }
+/* compact live "Peak now" score pinned at the top — current energy at the exact time, updates every minute */
+.topScore{ display:flex; align-items:center; gap:18px; padding:14px 20px; margin-bottom:22px; }
+.tsRing{ position:relative; width:72px; height:72px; display:grid; place-items:center; flex:none; }
+.tsRing svg{ position:absolute; inset:0; transform:rotate(-90deg); overflow:visible; }
+.tsRing .tr{ fill:none; stroke:rgba(255,255,255,.06); stroke-width:5; }
+.tsRing .fl{ fill:none; stroke:var(--ringc,var(--accent)); stroke-width:5; stroke-linecap:round; transition:stroke-dashoffset 1s var(--ease); filter:drop-shadow(0 0 5px var(--ringc,var(--accent))) drop-shadow(0 0 12px var(--ringc,var(--accent))); }
+.tsRing .glow{ position:absolute; inset:9px; border-radius:50%; background:radial-gradient(closest-side, var(--ringc,var(--accent)), transparent 72%); opacity:.18; filter:blur(10px); }
+.tsNum{ position:relative; z-index:1; font-family:var(--serif); font-style:italic; font-weight:600; font-size:30px; line-height:1; color:var(--fg); }
+.tsMeta{ display:flex; flex-direction:column; gap:4px; }
+.tsWord{ font-family:var(--serif); font-style:italic; font-size:20px; line-height:1; color:var(--accent2); }
+.tsCap{ font-family:var(--mono); font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
 .whyLink{ font-family:var(--serif); font-style:italic; font-size:14px; color:var(--muted2); cursor:pointer; border:0; background:none; }
 .whyLink:hover{ color:var(--accent2); }
 .whyBox{ display:none; margin-top:6px; width:100%; }
@@ -167,6 +178,13 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
 .scrubTip .l{ font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-top:1px; }
 .sleepMarks{ position:absolute; top:0; left:0; right:0; height:0; pointer-events:none; }
 .sleepMark{ position:absolute; top:-6px; transform:translateX(-50%); font-family:var(--mono); font-size:9px; letter-spacing:.04em; color:var(--muted2); white-space:nowrap; background:var(--panel2); border:1px solid var(--line2); border-radius:7px; padding:3px 8px; }
+/* live "now" marker on the graph (ported from Schedule Lab): value bubble + dot + line, plus the bedtime moon */
+.nowline{ position:absolute; top:0; bottom:18px; width:1px; background:rgba(255,255,255,.4); pointer-events:none; z-index:4; }
+.nowdot{ position:absolute; width:13px; height:13px; border-radius:50%; background:#fff; border:2px solid var(--accent2); box-shadow:0 0 14px var(--accent2); transform:translate(-50%,-50%); pointer-events:none; z-index:5; }
+.nowbubble{ position:absolute; transform:translate(-50%,calc(-100% - 14px)); background:var(--panel2); border:1px solid var(--line2); border-radius:11px; padding:6px 11px; text-align:center; box-shadow:0 8px 22px rgba(0,0,0,.5); pointer-events:none; z-index:5; -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.nowbubble b{ display:block; font-family:var(--serif); font-style:italic; font-size:20px; line-height:1; color:var(--fg); }
+.nowbubble span{ font-family:var(--mono); font-size:9px; letter-spacing:.06em; color:var(--muted2); }
+.nowmoon{ position:absolute; top:10px; transform:translateX(-50%); display:inline-flex; align-items:center; gap:6px; white-space:nowrap; background:var(--panel2); border:1px solid var(--line2); border-radius:10px; padding:5px 10px; font-family:var(--mono); font-size:10px; color:var(--muted2); pointer-events:none; z-index:4; }
 .taskMarks{ position:absolute; left:0; right:0; top:0; height:0; pointer-events:none; }
 .taskMark{ position:absolute; top:-9px; transform:translateX(-50%); display:inline-flex; align-items:center; gap:6px; font-family:var(--serif); font-style:italic; font-size:13px; letter-spacing:.01em; color:var(--fg); white-space:nowrap; background:var(--panel2); border:1px solid var(--line); border-bottom:2px solid var(--dc); border-radius:8px; padding:3px 9px; max-width:150px; box-shadow:0 6px 18px -10px rgba(0,0,0,.9); pointer-events:auto; cursor:grab; touch-action:none; transition:left .12s var(--ease); }
 .taskMark.dragging{ cursor:grabbing; transition:none; z-index:5; box-shadow:0 0 0 1px var(--dc),0 8px 22px -8px rgba(0,0,0,.9); }
@@ -912,9 +930,9 @@ function taskBands(){ return ''; }
 function pillDur(t){ const d=t.end-t.start, hh=Math.floor(d), mm=Math.round((d-hh)*60); return (hh?hh+'h':'')+(mm?mm+'m':''); }
 function fmtClk(h){ h=((h%24)+24)%24; let H=Math.floor(h), m=Math.round((h-H)*60); if(m===60){H++;m=0;} const ap=H<12?'am':'pm'; let hr=H%12; if(hr===0)hr=12; return hr+(m?':'+String(m).padStart(2,'0'):'')+ap; }
 function fmtRange(a,b){ let A=fmtClk(a),B=fmtClk(b); if(A.slice(-2)===B.slice(-2))A=A.slice(0,-2); return A+'–'+B; }
-function schOverlayHtml(){ const s=schedStyle(); const segs=effectiveSegments(); if(!segs.length)return '';
+function schOverlayHtml(){ const s=schedStyle(); const segs=effectiveSegments();
   const bottomPct=(PADB/CH*100).toFixed(2); let no=0;
-  return segs.map((t)=>{ const isTask=!t.gap; if(isTask)no++;
+  const bands = segs.map((t)=>{ const isTask=!t.gap; if(isTask)no++;
     const x0=(t.start/24*100), w=((t.end-t.start)/24*100); const col=segColor(t, isTask?(no-1):0); const op=s.op*(t.gap?0.55:1);
     let bg; if(s.fill==='solid')bg=toRGBA(col,op); else if(s.fill==='grad')bg='linear-gradient(to top,'+toRGBA(col,0)+','+toRGBA(col,Math.min(0.9,op*1.6))+')'; else bg='transparent';
     const band='<div class="schBand'+(s.bd?' bd':'')+(t.gap?' gap':'')+'" style="left:'+x0.toFixed(2)+'%;width:'+w.toFixed(2)+'%;bottom:'+bottomPct+'%;background:'+bg+';border-radius:'+s.rad+'px '+s.rad+'px 0 0;--bc:'+toRGBA(col,.5)+'"></div>';
@@ -924,10 +942,20 @@ function schOverlayHtml(){ const s=schedStyle(); const segs=effectiveSegments();
     inner+='<span class="pillNm">'+esc(keyword(t.label))+'</span>';
     if(s.dur&&isTask)inner+='<span class="pillTm">'+fmtRange(t.start,t.end)+'</span>';     // fitted time-range, e.g. 6–8am
     else if(s.dur&&!isTask)inner+='<span class="pillDur">'+pillDur(t)+'</span>';
-    const pill='<div class="schPill '+s.pill+' '+s.pos+(t.gap?' gap':(t.locked?' locked':' movable'))+'"'+(t.gap?'':' data-taskid="'+t.id+'"')+' style="left:'+center.toFixed(2)+'%;--pc:'+col+'">'+inner+((t.gap||t.locked)?'':'<span class="pillGrip">⠿</span>')+'</div>';
+    const pill='<div class="schPill '+s.pill+' '+s.pos+(t.gap?' gap':(t.locked?' locked':' movable'))+'"'+(t.gap?'':' data-taskid="'+t.id+'"')+' data-cpct="'+center.toFixed(2)+'" data-spct="'+(t.start/24).toFixed(4)+'" data-epct="'+(t.end/24).toFixed(4)+'" style="left:'+center.toFixed(2)+'%;--pc:'+col+'">'+inner+((t.gap||t.locked)?'':'<span class="pillGrip">⠿</span>')+'</div>';
     const lock=t.gap?'':'<button class="schLock'+(t.locked?' on':'')+'" data-lock="'+t.id+'" style="left:'+center.toFixed(2)+'%;bottom:calc('+bottomPct+'% + 6px)" title="'+(t.locked?'Locked at '+fmtRange(t.start,t.end)+' — click to unlock & drag':'Movable — click to lock at this time')+'">'+(t.locked?'🔒':'🔓')+'</button>';
     return band+pill+lock;
-  }).join(''); }
+  }).join('');
+  return bands+nowOverlayHtml(); }
+// live "now" value bubble + dot + line on the graph, plus the bedtime moon (positions are data-driven; lanes resolved by layoutSchedPills)
+function nowOverlayHtml(){
+  const t=nowT(), v=energyAt(t).e, left=(t/24*100), top=(yOf(v)/CH*100);
+  const sp=optimalSleep(), bedLeft=(sp.bed/24*100);
+  return '<div class="nowline" style="left:'+left.toFixed(2)+'%"></div>'
+    +'<div class="nowbubble" data-nowbubble="1" style="left:'+left.toFixed(2)+'%;top:'+top.toFixed(2)+'%"><b>'+Math.round(v)+'</b><span>'+clockOf(t)+'</span></div>'
+    +'<div class="nowdot" style="left:'+left.toFixed(2)+'%;top:'+top.toFixed(2)+'%"></div>'
+    +'<div class="nowmoon" data-cpct="'+bedLeft.toFixed(2)+'" style="left:'+bedLeft.toFixed(2)+'%"><span>☾</span> '+clockOf(sp.bed)+'</div>';
+}
 function keyword(label){ return String(label).trim().split(/\s+/).slice(0,2).join(' ').slice(0,16); }
 function armRectSvg(){ const g=schGapWindow(); if(!g||!(g.hi>g.lo+0.05))return ''; const x0=xOf(g.lo),x1=xOf(g.hi);
   return '<rect x="'+x0.toFixed(1)+'" y="0" width="'+Math.max(2,x1-x0).toFixed(1)+'" height="'+(CH-PADB)+'" fill="rgba(110,231,183,.10)" stroke="#6EE7B7" stroke-width="1.5" stroke-dasharray="5 4" rx="6"><animate attributeName="opacity" values=".7;1;.7" dur="1.6s" repeatCount="indefinite"/></rect>'; }
@@ -942,6 +970,52 @@ function bindTaskDrag(){ const wrap=document.getElementById('chartWrap'), svg=do
     document.addEventListener('pointermove',move); document.addEventListener('pointerup',up);
     document.addEventListener('touchmove',move,{passive:false}); document.addEventListener('touchend',up);
   }); }); }
+/* Anti-overlap pass (ported from Schedule Lab): measure each pill, keep it over
+   its own band when wide enough, then stack horizontally-colliding pills into
+   vertical lanes so text can never overlap. Runs after innerHTML + on resize. */
+let schTopLanes=null, schRowH=38;
+function layoutSchedPills(){
+  const ov=document.getElementById('schBands'); if(!ov)return;
+  const W=ov.clientWidth, H=ov.clientHeight; if(!W)return;
+  const refs=[...ov.querySelectorAll('.schPill,.nowmoon')].map(el=>({
+    el, pos: el.classList.contains('bottom')?'bottom':(el.classList.contains('mid')?'mid':'top'),
+    centerPct:+(el.dataset.cpct||0),
+    startPct: el.dataset.spct!=null?+el.dataset.spct:null,
+    endPct: el.dataset.epct!=null?+el.dataset.epct:null
+  }));
+  const groups={}; refs.forEach(r=>{ (groups[r.pos]=groups[r.pos]||[]).push(r); });
+  Object.keys(groups).forEach(pos=>{
+    const list=groups[pos];
+    list.forEach(r=>{ const w=r.el.offsetWidth; r.w=w; r.h=r.el.offsetHeight;
+      let cx=W*r.centerPct/100;
+      if(r.startPct!=null){ const bl=W*r.startPct, br=W*r.endPct; if(br-bl>w+8) cx=clamp(cx, bl+w/2+2, br-w/2-2); }
+      cx=clamp(cx, w/2+4, W-w/2-4); r.cx=cx; r.l=cx-w/2; r.rgt=cx+w/2; });
+    list.sort((a,b)=>a.cx-b.cx);
+    const lanes=[], G=10, rowH=((list[0]&&list[0].h)||30)+8;
+    list.forEach(r=>{ let lane=0;
+      while(lane<24){ const occ=lanes[lane]||(lanes[lane]=[]);
+        const hit=occ.some(s=>!(r.rgt<s[0]-G||r.l>s[1]+G));
+        if(!hit){ occ.push([r.l,r.rgt]); break; } lane++; }
+      const ph=r.h; let top;
+      if(pos==='bottom') top=(H-12-ph)-lane*rowH;
+      else if(pos==='mid') top=(H/2-ph/2)+lane*rowH;
+      else top=12+lane*rowH;
+      r.el.style.left=r.cx+'px'; r.el.style.top=top+'px'; r.el.style.bottom='auto'; r.el.style.transform='translateX(-50%)';
+    });
+    if(pos==='top'){ schTopLanes=lanes; schRowH=rowH; }
+  });
+  const bub=ov.querySelector('.nowbubble'); if(bub) dodgeSchedBubble(bub, nowT()/24*100);
+}
+/* the now-value bubble drops below any top-lane pills it would collide with */
+function dodgeSchedBubble(bub, nxPct){
+  const ov=document.getElementById('schBands'); if(!ov)return; const W=ov.clientWidth; if(!W)return;
+  const bw=bub.offsetWidth, cx=clamp(W*nxPct/100, bw/2+4, W-bw/2-4), l=cx-bw/2, r=cx+bw/2;
+  const lanes=schTopLanes||[], rowH=schRowH||38; let maxLane=-1;
+  lanes.forEach((occ,i)=>{ if(occ&&occ.some(s=>!(r<s[0]-10||l>s[1]+10))) maxLane=Math.max(maxLane,i); });
+  if(maxLane>=0){ bub.style.left=cx+'px'; bub.style.top=(12+(maxLane+1)*rowH)+'px'; bub.style.transform='translateX(-50%)'; }
+}
+let _schResizeT=null;
+window.addEventListener('resize',()=>{ clearTimeout(_schResizeT); _schResizeT=setTimeout(layoutSchedPills,120); });
 function scheduleHtml(){
   const tasks=loadSched(), cur=curTask(), nxt=nextTask();
   const input='<div class="schInputRow"><input id="schInput" class="schInput" placeholder="e.g. school 8-2, gym 1930 hard, gap claude" autocomplete="off"><button class="schAdd" data-addsched="1">＋ Add</button></div><div class="schHint">fixed task = give a time (9-11) · “big gap claude” fills your whole free day · “small gap homework” fills only the short windows between tasks · gaps never touch sleep · easy/medium/hard = color <span style="opacity:.6">· build '+SCHED_SEED+'</span></div>';
@@ -1024,7 +1098,7 @@ function chartSvg(){
   // peak marker dot
   let pk='';
   if(PEAK){ const px=xOf(PEAK.t),py=yOf(PEAK.e); pk='<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="4.5" fill="#0b110e" stroke="#34D399" stroke-width="2"/>'; }
-  return '<svg class="chartSvg" id="chartSvg" viewBox="0 0 '+CW+' '+CH+'" preserveAspectRatio="none">'+defs+gridLines()+taskBands()+armRectSvg()+sleepMarkers()+crashMarkers()+nowMarker()+body+pk+'</svg>';
+  return '<svg class="chartSvg" id="chartSvg" viewBox="0 0 '+CW+' '+CH+'" preserveAspectRatio="none">'+defs+gridLines()+taskBands()+armRectSvg()+sleepMarkers()+crashMarkers()+body+pk+'</svg>';
 }
 function crashMarkers(){ const cc=caffeineCrash(), mc=medCrash(); let s='';
   const ln=t=>{ const x=xOf(t); return '<line x1="'+x.toFixed(1)+'" y1="0" x2="'+x.toFixed(1)+'" y2="'+(CH-PADB)+'" stroke="#EF4444" stroke-width="1.4" stroke-dasharray="4 4" opacity=".7"/>'; };
@@ -1272,22 +1346,14 @@ function render(){
   const tkItems = tickerItems().map(it=>'<div class="tkItem">'+it[0]+' <b>'+esc(it[1])+'</b><span class="dot"></span></div>').join('');
   const tk='<div class="ticker"><div class="tkLive"><span class="d"></span>Live</div><div class="tkScroll"><div class="tkTrack">'+tkItems+tkItems+'</div></div></div>';
 
-  // right now
-  const ov=overall(); const ot=toneOf(ov.score); const sv=ov.score!=null?ov.score:0;
-  const c1=2*Math.PI*90;
-  const ovRing='<div class="bigRing" style="--ringc:'+ot.c+'"><div class="glow"></div>'
-    +'<svg viewBox="0 0 200 200"><circle class="tr" cx="100" cy="100" r="90"/>'
-    +(ov.score!=null?'<circle class="fl" cx="100" cy="100" r="90" style="stroke-dasharray:'+c1+';stroke-dashoffset:'+(c1*(1-sv/100))+'"/>':'')
-    +'</svg>'
-    +'<div class="bigInner"><div class="bigNum">'+(ov.score!=null?ov.score:'—')+'</div><div class="bigWord">'+ot.word+'</div><div class="bigCap">Today overall</div></div></div>';
-  let whyRows = ov.labels.map(l=>'<div class="whyRow"><span>'+l[0]+'</span><b>'+Math.round(l[1])+'%</b></div>').join('');
-  if(ov.feel!=null){
-    whyRows += '<div class="whyRow"><span>Objective blend</span><b>'+ov.objective+'%</b></div>'
-      + '<div class="whyRow"><span>You feel '+ov.feel+'% ('+ov.feelW+'% pull)</span><b>'+(ov.adj>=0?'+':'')+ov.adj+'</b></div>'
-      + '<div class="whyRow" style="border-top-color:var(--line2)"><span style="color:var(--accent2)">Today overall</span><b style="color:var(--accent2)">'+ov.score+'%</b></div>';
-  }
-  const why='<div class="whyBox'+(whyOpen?' on':'')+'" id="whyBox">'+whyRows+'</div>';
-  const scoreCard='<div class="card scoreCard">'+ovRing+'<button class="whyLink" id="whyLink">Why this score →</button>'+why+'</div>';
+  // headline live score — your Peak right now, read off the energy curve at this exact moment.
+  // Re-rendered every 60s (see the interval at the bottom) so it tracks the curve through the day.
+  const nowE=Math.round(energyAt(nowT()).e); const nt=toneOf(nowE); const c1=2*Math.PI*30;
+  const topScore='<div class="card topScore"><div class="tsRing" style="--ringc:'+nt.c+'"><div class="glow"></div>'
+    +'<svg viewBox="0 0 72 72"><circle class="tr" cx="36" cy="36" r="30"/>'
+    +'<circle class="fl" id="tsFill" cx="36" cy="36" r="30" style="stroke-dasharray:'+c1+';stroke-dashoffset:'+(c1*(1-nowE/100))+'"/></svg>'
+    +'<div class="tsNum" id="tsNum">'+nowE+'</div></div>'
+    +'<div class="tsMeta"><div class="tsWord">'+nt.word+'</div><div class="tsCap">Peak now · '+clockOf(nowT())+'</div></div></div>';
 
   const recs=recommendations();
   const todayCard='<div class="card"><p class="todayEyebrow">Today</p>'
@@ -1298,7 +1364,7 @@ function render(){
 
   const nowSec='<div class="sec"><span class="secNum">03</span><span class="secTitle">Right now</span><span class="secLine"></span><button class="secI'+(infoOpen?' on':'')+'" id="infoBtn" title="How this is calculated">i</button></div>'
     + (infoOpen?infoCardHtml():'')
-    +'<div class="nowGrid">'+scoreCard+todayCard+'</div>';
+    + todayCard;
 
   // energy curve
   const c2=2*Math.PI*38;
@@ -1317,7 +1383,7 @@ function render(){
     +'<div class="seg">'+['line','bars','stack'].map(t=>'<button class="segBtn '+(chartType===t?'on':'')+'" data-chart="'+t+'">'+t+'</button>').join('')+'</div></div>'
     + feelBarHtml()
     +'<div class="chartWrap" id="chartWrap">'+chartSvg()
-    +'<div class="sleepMarks"><div class="sleepMark" style="left:'+clamp(sp.bed/24*100,5,95)+'%">🌙 '+clockOf(sp.bed)+'</div><div class="sleepMark" style="left:'+clamp(sp.wake/24*100,5,95)+'%">☀️ '+clockOf(sp.wake)+'</div></div>'
+    +'<div class="sleepMarks"><div class="sleepMark" style="left:'+clamp(sp.wake/24*100,5,95)+'%">☀️ '+clockOf(sp.wake)+'</div></div>'
     +'<div class="schBands" id="schBands">'+schOverlayHtml()+'</div>'
     +'<div class="crashMarks">'+crashLabels+'</div>'
     +'<div class="scrubLine" id="scrubLine"></div><div class="scrubDot" id="scrubDot"></div><div class="scrubTip" id="scrubTip"></div></div>'
@@ -1334,8 +1400,8 @@ function render(){
   const suppSec='<div class="sec"><span class="secNum">07</span><span class="secTitle">Supplements</span><span class="secLine"></span></div>'+suppCardHtml();
 
   const footNote='<p class="footNote">Peak is a science-based estimate from your own data — not a medical measurement. It personalizes to you over ~30 days. Tap the “i” to see how it’s calculated. Meds are modeled for information only, never as dosing advice.</p>';
-  document.getElementById('app').innerHTML=head+srcRow+mCard+tk+daySec+schedSec+nowSec+cafSec+medSec+waterSec+suppSec+footNote;
-  bindScrub(); bindFeel(); bindCaf(); bindMed(); bindSched(); bindTaskDrag(); tickCountdowns();
+  document.getElementById('app').innerHTML=head+srcRow+topScore+mCard+tk+daySec+schedSec+nowSec+cafSec+medSec+waterSec+suppSec+footNote;
+  bindScrub(); bindFeel(); bindCaf(); bindMed(); bindSched(); bindTaskDrag(); layoutSchedPills(); tickCountdowns();
 }
 function feelBarHtml(){
   const f=latestFeelToday(); const val=f!=null?f:Math.round(energyAt(nowT()).e);
