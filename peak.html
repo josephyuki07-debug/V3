@@ -739,8 +739,20 @@ function optimalSleep(){ const h=health(); const wake=wakeBed().wake; const need
  * Schedule — natural-language tasks mapped onto the peak curve
  * ============================================================ */
 const SCHED='peak_schedule_v1'; let planOpen=false;
-function loadSched(){ const r=readLS(SCHED); return (r&&r.day===dKey()&&Array.isArray(r.tasks))?r.tasks:[]; }
-function saveSched(tasks){ try{ localStorage.setItem(SCHED,JSON.stringify({day:dKey(),tasks})); }catch(e){} if(window.PatronDB&&PatronDB.isCloud())PatronDB.set('peaksched',{day:dKey(),tasks}); render(); }
+/* Baked schedule shipped from Schedule Lab — the day's template. SCHED_SEED is
+ * bumped every time a new schedule is shipped, so a fresh ship overrides any
+ * stale saved tasks once (the file is the source of truth, like the style),
+ * while still letting you add/drag/edit in Peak afterwards (your edits save
+ * under today's key with the current seed and win until the next day or ship). */
+const SCHED_SEED='lab-2026-06-07';
+const DEFAULT_SCHED=[
+  { id:'t1', label:'Morning',   start:6,    end:8,    durH:2,   color:'#6EE7B7', icon:'☀', diff:'easy', locked:true,  explicit:true, gap:false },
+  { id:'t2', label:'Claude',    start:9,    end:11.5, durH:2.5, color:'#A78BFA', icon:'✦', diff:'med',  locked:false, explicit:true, gap:false },
+  { id:'t3', label:'Homework',  start:13,   end:15.5, durH:2.5, color:'#F59E0B', icon:'✎', diff:'hard', locked:false, explicit:true, gap:false },
+  { id:'t4', label:'Wind down', start:21.5, end:23,   durH:1.5, color:'#38BDF8', icon:'☾', diff:'easy', locked:true,  explicit:true, gap:false }
+];
+function loadSched(){ const r=readLS(SCHED); return (r&&r.seed===SCHED_SEED&&r.day===dKey()&&Array.isArray(r.tasks))?r.tasks:DEFAULT_SCHED.map(t=>Object.assign({},t)); }
+function saveSched(tasks){ try{ localStorage.setItem(SCHED,JSON.stringify({day:dKey(),seed:SCHED_SEED,tasks})); }catch(e){} if(window.PatronDB&&PatronDB.isCloud())PatronDB.set('peaksched',{day:dKey(),seed:SCHED_SEED,tasks}); render(); }
 function diffOf(s){ if(/\b(hard|intense|deep|heavy|max|pr|grind)\b/i.test(s))return 'hard'; if(/\b(easy|chill|light|admin|rest|relax|recover)\b/i.test(s))return 'easy'; return 'med'; }
 /* ----------------------------------------------------------------------
  * Schedule visual style — the "model" you design in Schedule Lab.
