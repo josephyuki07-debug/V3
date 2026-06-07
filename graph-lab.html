@@ -212,7 +212,7 @@
  * ============================================================ */
 window.PEAK_BG = (function(){
   var CSS = ""
-  + "#peakBg{position:fixed;inset:0;z-index:-3;pointer-events:none;background:#000}"
+  + "#peakBg{position:fixed;inset:0;z-index:-3;pointer-events:none;background:#000}#peakBg::after{content:'';position:absolute;inset:0;z-index:1;background:radial-gradient(135% 105% at 50% 0%,rgba(2,4,9,.34),rgba(2,4,9,.70))}#peakBg>*{z-index:0}"
   + "body.pbgOn .page::before{background:none!important}body.pbgOn{background:#04060a}"
   + ".pbgBase{overflow:hidden;background:#04060a}.pbgBase>*{position:absolute;inset:-25%;will-change:transform,opacity,filter}"
   // 1 aurora

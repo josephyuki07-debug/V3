@@ -460,7 +460,7 @@ body{ background:var(--bg); color:var(--fg); font-family:var(--ui); -webkit-font
  * ============================================================ */
 window.PEAK_BG = (function(){
   var CSS = ""
-  + "#peakBg{position:fixed;inset:0;z-index:-3;pointer-events:none;background:#000}"
+  + "#peakBg{position:fixed;inset:0;z-index:-3;pointer-events:none;background:#000}#peakBg::after{content:'';position:absolute;inset:0;z-index:1;background:radial-gradient(135% 105% at 50% 0%,rgba(2,4,9,.34),rgba(2,4,9,.70))}#peakBg>*{z-index:0}"
   + "body.pbgOn .page::before{background:none!important}body.pbgOn{background:#04060a}"
   + ".pbgBase{overflow:hidden;background:#04060a}.pbgBase>*{position:absolute;inset:-25%;will-change:transform,opacity,filter}"
   // 1 aurora
@@ -848,7 +848,7 @@ const SCHED='peak_schedule_sa_v1'; let planOpen=false;  // standalone uses its O
  * stale saved tasks once (the file is the source of truth, like the style),
  * while still letting you add/drag/edit in Peak afterwards (your edits save
  * under today's key with the current seed and win until the next day or ship). */
-const SCHED_SEED='lab-2026-06-07S-MTN';
+const SCHED_SEED='lab-2026-06-07T-SCRIM';
 const DEFAULT_SCHED=[];
 /* one-time cleanup: physically drop a schedule saved by an older build (seed
  * mismatch) so stale/overlapping tasks can't linger in localStorage. */
