@@ -203,39 +203,49 @@ body {
   function scrollFeed() { feed.scrollTop = feed.scrollHeight; }
   function setStatus(s) { statusText.textContent = s; }
 
-  /* ---- the mentor's "knowledge": keyword-matched replies, each with a mood ---- */
-  const REPLIES = [
-    { keys: ['protein','eat','food','meal','macro','calorie','diet'],
-      html: 'Lock in <b>protein first</b> — aim for a palm of it every meal, then fill the rest with whatever keeps you <b>full and moving</b>. You are at <span class="pill">27g</span> so far; plenty of room to stack it up.', mood: 'happy' },
-    { keys: ['sleep','tired','rest','recover','recovery'],
-      html: 'Recovery is where the gains actually land. Protect a <b>consistent wake time</b>, kill screens 30 min before bed, and treat sleep like the most important set of your day.', mood: 'star' },
-    { keys: ['gym','train','workout','lift','strength','muscle'],
-      html: 'Progressive overload beats intensity chasing. Add a <b>little weight or one rep</b> over last time and the body has no choice but to adapt. Show up, log it, repeat.', mood: 'wink' },
-    { keys: ['stress','anxious','overwhelm','burnt','burnout','motivation','stuck'],
-      html: 'Take the pressure off the whole mountain and just do the <b>next honest step</b>. Momentum is a mood-fixer — start tiny, finish something, let it compound.', mood: 'happy' },
-    { keys: ['water','hydrate','drink','thirsty'],
-      html: 'Easy win: a glass now, a glass with each meal. <b>Hydration first</b> usually fixes half the "low energy" you were about to blame on something else.', mood: 'happy' },
-    { keys: ['goal','plan','habit','routine','track'],
-      html: 'Pick <b>one</b> keystone habit and make it stupidly small — small enough you cannot say no. The streak is the strategy. We can build the rest on top of that.', mood: 'star' },
-  ];
-  const FALLBACK = [
-    { html: 'Good question. Tell me a bit more and I will give you something you can actually <b>act on today</b> — no fluff.', mood: 'happy' },
-    { html: 'I am with you. Break it down for me and we will find the <b>one move</b> that matters most right now.', mood: 'wink' },
-  ];
-  let fbIdx = 0;
-  function pickReply(text) {
-    const t = text.toLowerCase();
-    const hit = REPLIES.find(r => r.keys.some(k => t.includes(k)));
-    if (hit) return hit;
-    return FALLBACK[fbIdx++ % FALLBACK.length];
+  /* ---- read everything the dashboard has saved (each app stores its own
+         keys in localStorage) so Nova can mentor across the whole picture ---- */
+  function readDashboardData() {
+    const out = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k === 'patron_theme') continue;
+      try { out[k] = JSON.parse(localStorage.getItem(k)); }
+      catch { out[k] = localStorage.getItem(k); }
+    }
+    return out;
+  }
+
+  /* ---- real mentor reply: the key lives server-side in /api/mentor ---- */
+  async function askNova(userText) {
+    const data = readDashboardData();
+    const res = await fetch('/api/mentor', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-opus-4-8',
+        max_tokens: 1024,
+        system:
+          "You are Nova, the user's personal mentor inside their life-tracking " +
+          "dashboard. You can see ALL their data (food, water, gym, finance, " +
+          "sleep, readiness, goals, supplements). Give honest, specific, " +
+          "encouraging guidance across any area of their life — not just " +
+          "nutrition. Keep replies short and always give ONE thing to act on. " +
+          "Current dashboard data as JSON:\n" + JSON.stringify(data),
+        messages: [{ role: 'user', content: userText }],
+      }),
+    });
+    const json = await res.json();
+    if (json.error || !json.content) return "Hmm, I couldn't reach my brain just now — check that the API key is set in .env.";
+    return json.content[0].text;
   }
 
   /* ---- cozy loader: the thinking state, rotating mentor "thoughts" ---- */
   const CZ_TAGS = ['Thinking', 'One sec', 'On it'];
   const CZ_LINES = [
-    { text: 'Reading what you asked and the angle that actually helps.', hl: 'actually helps' },
-    { text: 'Pulling the one move that matters more than the rest.', hl: 'one move' },
-    { text: 'Keeping it short, honest, and something you can do today.', hl: 'do today' },
+    { text: 'Reading your whole day across the dashboard.', hl: 'whole day' },
+    { text: 'Finding the one move that matters most right now.', hl: 'one move' },
+    { text: 'Keeping it honest and something you can do today.', hl: 'do today' },
   ];
   function czTextHtml(item) {
     if (!item.hl) return escapeHtml(item.text);
@@ -282,8 +292,7 @@ body {
     return '<div class="bubble-text">' + html + '</div>';
   }
 
-  function respond(text) {
-    const reply = pickReply(text);
+  async function respond(text) {
     // Nova notices, then thinks (face) while the cozy loader rotates
     if (window.Nova) window.Nova.setExpression('surprised');
     setStatus('looking…');
@@ -292,15 +301,17 @@ body {
 
     setTimeout(() => { if (window.Nova) window.Nova.setExpression('thinking'); setStatus('thinking…'); }, 550);
 
-    // after a cozy beat, swap the loader for the real answer
-    setTimeout(() => {
-      loader.stop();
-      loader.el.innerHTML = '<div class="bubble"><span class="tagchip">Nova</span>' + revealMarkup(reply.html) + '</div>';
-      setStatus('talking…');
-      if (window.Nova) window.Nova.setExpression(reply.mood, 4);
-      scrollFeed();
-      setTimeout(() => setStatus('ready when you are'), 4200);
-    }, 2400);
+    // wait for the real answer from the mentor, then swap the loader for it
+    let replyText;
+    try { replyText = await askNova(text); }
+    catch (e) { replyText = "Hmm, I couldn't reach my brain just now — check that the API key is set in .env."; }
+
+    loader.stop();
+    loader.el.innerHTML = '<div class="bubble"><span class="tagchip">Nova</span>' + revealMarkup(escapeHtml(replyText)) + '</div>';
+    setStatus('talking…');
+    if (window.Nova) window.Nova.setExpression('happy', 4);
+    scrollFeed();
+    setTimeout(() => setStatus('ready when you are'), 4200);
   }
 
   function send(text) {
@@ -582,5 +593,11 @@ body {
 
   window.Nova = buildNova(document.getElementById('scene'))
   </script>
+
+  <!-- Whole-device cloud sync — same as every other page, so the mentor sees
+       ALL your dashboard data (finance, gym, food, …), including data entered
+       on other devices. Pulls the shared Supabase snapshot into localStorage. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="db.js?v=15"></script>
 </body>
 </html>
