@@ -109,6 +109,8 @@ body {
 }
 .bubble b, .bubble .hl { color: var(--accent); font-weight: 700; }
 .bubble .pill { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); padding: 1px 7px; border-radius: 6px; font-weight: 600; }
+.bubble .reply-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.bubble .reply-list li { line-height: 1.45; }
 
 /* text reveal (fade + rise) */
 .bubble-text { animation: rvFade .5s ease both; }
@@ -230,10 +232,13 @@ body {
           "dashboard. You can see ALL their data (food, water, gym, finance, " +
           "sleep, readiness, goals, supplements). Give honest, specific, " +
           "encouraging guidance across any area of their life — not just " +
-          "nutrition. Keep replies short and always give ONE thing to act on. " +
-          "Write in plain, simple language — short sentences, no jargon. " +
-          "Wrap the key words and important numbers in **double asterisks** so " +
-          "they stand out (e.g. **$200/mo**, **cancel today**). " +
+          "nutrition. " +
+          "FORMAT RULES (always follow): " +
+          "1) Answer in short bullet points — start each line with '- '. " +
+          "2) Keep each bullet to one short line, few words, no fluff. " +
+          "3) Use plain language, no jargon. " +
+          "4) Wrap key words and numbers in **double asterisks** (e.g. **$200/mo**). " +
+          "5) Max 5 bullets, then ONE final bullet starting with '- Do today:' giving the single action. " +
           "Current dashboard data as JSON:\n" + JSON.stringify(data),
         messages: [{ role: 'user', content: userText }],
       }),
@@ -297,8 +302,21 @@ body {
 
   // Escape, then turn **key words** into highlighted pills so the important
   // bits pop. Safe because we escape BEFORE adding our own markup.
+  function inlineMarks(s) {
+    return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<span class="pill">$1</span>');
+  }
+  // Render Nova's bullet-point replies: '- ' lines become a real list,
+  // everything else stays as line-broken text.
   function highlightReply(text) {
-    return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, '<span class="pill">$1</span>');
+    const lines = String(text).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const items = [], loose = [];
+    for (const l of lines) {
+      if (/^[-•*]\s+/.test(l)) items.push('<li>' + inlineMarks(l.replace(/^[-•*]\s+/, '')) + '</li>');
+      else loose.push(inlineMarks(l));
+    }
+    let html = loose.join('<br>');
+    if (items.length) html += (html ? '<br>' : '') + '<ul class="reply-list">' + items.join('') + '</ul>';
+    return html;
   }
 
   async function respond(text) {
