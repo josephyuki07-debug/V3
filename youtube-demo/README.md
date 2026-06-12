@@ -42,6 +42,24 @@ A standalone copy of the Nova mentor page with the **real 3D avatar** but
 
 Open `nova-demo.html` locally (or at `/nova-demo.html` once deployed) and screen-record it.
 
+## The free, usable version — `nova-lite.html`
+
+A simple drop-in mentor anyone can add to their own dashboard. **Bring-your-own-key:**
+the viewer pastes their own Anthropic API key (stored only in their browser), and
+Nova Lite calls the Claude API directly — no backend needed.
+
+- Flat CSS orb avatar (no 3D engine), single-column chat — deliberately lighter
+  than the premium build.
+- Reads whatever the dashboard saved in `localStorage` for context.
+- Same short bullet-point replies with highlighted key words.
+
+This is the **free tier** you can give viewers. The premium episode (3D Nova, the
+Spark voice scheduler, a secure server-side key proxy, palettes) is what they get
+on Patreon — so the lite version sells the upgrade.
+
+To drop into any dashboard: copy `nova-lite.html` in, link to it, done. It needs
+no env vars and no server.
+
 ## Filming tip
 
 For a "real" AI clip, film against your **actual deployed app** (the private
